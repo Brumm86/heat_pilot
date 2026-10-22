@@ -233,3 +233,23 @@ async def test_unload_and_reload(
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert dt_util.utcnow().year == 2026
+
+
+async def test_card_is_registered_and_status_exposes_schedule(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    from homeassistant.components.frontend import (
+        DATA_EXTRA_JS_URL_ES5,
+        DATA_EXTRA_MODULE_URL,
+    )
+
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    modules = hass.data[DATA_EXTRA_MODULE_URL].urls
+    es5 = hass.data[DATA_EXTRA_JS_URL_ES5].urls
+    assert any("/heat_pilot_static/heat-pilot-card.js?v=" in url for url in modules)
+    assert any("/heat_pilot_static/heat-pilot-card.js?v=" in url for url in es5)
+
+    status = hass.states.get("sensor.room_status")
+    assert status.attributes["schedule"] == SCHEDULE
+    assert status.attributes["thermostats"] == [THERMOSTAT]

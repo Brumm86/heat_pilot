@@ -33,6 +33,16 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 Thermostate (mindestens eines), Zeitplan, Tür- und Fenstersensoren, Personen, Wartezeit bei offener Tür/Fenster (Standard 3 min), Wartezeit bei Abwesenheit (Standard 15 min).
 
+## Lovelace-Karte
+
+Die Karte wird von der Integration automatisch geladen. Dashboard bearbeiten → Karte hinzufügen → „Heat Pilot“, oder per YAML:
+
+```yaml
+type: custom:heat-pilot-card
+```
+
+Die Karte findet alle Räume selbst. „Plan bearbeiten“ öffnet den Zeitplan-Helfer des Raums (dort über das Zahnrad bearbeiten).
+
 ## Benachrichtigungen
 
 Einstellungen → Heat Pilot → Konfigurieren: Admin-Handy, Handy je Person (feste Zuordnung), Wartezeiten und Dashboard-Pfad.

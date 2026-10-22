@@ -4,20 +4,26 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from pathlib import Path
 
 import voluptuous as vol
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.loader import async_get_integration
 
 from .const import (
     ATTR_END_DAY,
     ATTR_END_MONTH,
     ATTR_START_DAY,
     ATTR_START_MONTH,
+    CARD_FILENAME,
+    CARD_URL_PATH,
     DOMAIN,
     SERVICE_SET_HEATING_PERIOD,
 )
@@ -84,7 +90,31 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         _async_set_heating_period,
         schema=SET_HEATING_PERIOD_SCHEMA,
     )
+    await _async_register_frontend(hass)
     return True
+
+
+async def _async_register_frontend(hass: HomeAssistant) -> None:
+    """Serve the Lovelace card and load it on every dashboard.
+
+    Three workarounds, all proven with the family_tasks card on Android:
+
+    * the URL carries ``?v=<version>`` so the companion app's cache is busted
+      on every release,
+    * it is registered twice, as module and as ``es5`` script, because a
+      WebView that Home Assistant does not classify as "latest" only loads
+      the ES5 list (the card file has no import/export for that reason),
+    * the card file re-defines itself once ``<home-assistant>`` is defined
+      (see the end of the card file).
+    """
+    integration = await async_get_integration(hass, DOMAIN)
+    www_dir = Path(__file__).parent / "www"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL_PATH, str(www_dir / CARD_FILENAME), cache_headers=False)]
+    )
+    card_url = f"{CARD_URL_PATH}?v={integration.version}"
+    add_extra_js_url(hass, card_url)
+    add_extra_js_url(hass, card_url, es5=True)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HeatPilotConfigEntry) -> bool:

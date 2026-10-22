@@ -49,6 +49,7 @@ class RoomStatusSensor(HeatPilotEntity, SensorEntity):
         status = self.room_status
         if status is None:
             return None
+        room = self.coordinator.rooms.get(self._room_id)
         return {
             "hvac_mode": status.decision.hvac_mode,
             "target_temperature": status.decision.target,
@@ -58,6 +59,8 @@ class RoomStatusSensor(HeatPilotEntity, SensorEntity):
             "opening_pending": status.opening_pending,
             "room_absent": status.room_absent,
             "unavailable_sensors": list(status.unavailable_sensors),
+            "schedule": room.schedule if room else None,
+            "thermostats": list(room.thermostats) if room else [],
         }
 
 

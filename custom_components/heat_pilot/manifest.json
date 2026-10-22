@@ -3,12 +3,15 @@
   "name": "Heat Pilot",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "http",
+    "frontend"
+  ],
   "documentation": "https://github.com/Brumm86/heat_pilot",
   "integration_type": "hub",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Brumm86/heat_pilot/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

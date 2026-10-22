@@ -72,3 +72,7 @@ DOOR_WARNING_MAX = 3
 # Admin alerts repeat every 6 hours, but only between 08:00 and 22:00.
 ADMIN_REPEAT_HOURS = 6
 ADMIN_WINDOW = (8, 22)
+
+# Lovelace card, served from the integration's www folder.
+CARD_FILENAME = "heat-pilot-card.js"
+CARD_URL_PATH = f"/{DOMAIN}_static/{CARD_FILENAME}"
