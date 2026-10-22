@@ -1,0 +1,163 @@
+{
+  "title": "Heat Pilot",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Heat Pilot einrichten",
+        "description": "Heat Pilot wird einmal eingerichtet. Räume fügst du danach auf der Seite der Integration hinzu („Raum hinzufügen“)."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Heat Pilot kann nur einmal eingerichtet werden."
+    }
+  },
+  "config_subentries": {
+    "room": {
+      "initiate_flow": {
+        "user": "Raum hinzufügen",
+        "reconfigure": "Raum neu konfigurieren"
+      },
+      "entry_type": "Raum",
+      "step": {
+        "user": {
+          "title": "Raum hinzufügen",
+          "description": "Lege einen Raum mit Thermostaten, Zeitplan und optionalen Tür-/Fenstersensoren und Personen an.",
+          "data": {
+            "name": "Raumname",
+            "thermostats": "Thermostate",
+            "schedule": "Zeitplan (an = Komfort, aus = Absenkung)",
+            "door_sensors": "Türsensoren",
+            "window_sensors": "Fenstersensoren",
+            "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
+            "open_delay_minutes": "Minuten offen bis zum Abschalten",
+            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten"
+          }
+        },
+        "reconfigure": {
+          "title": "Raum neu konfigurieren",
+          "description": "Ändere Thermostate, Zeitplan, Sensoren, Personen und Wartezeiten des Raums.",
+          "data": {
+            "name": "Raumname",
+            "thermostats": "Thermostate",
+            "schedule": "Zeitplan (an = Komfort, aus = Absenkung)",
+            "door_sensors": "Türsensoren",
+            "window_sensors": "Fenstersensoren",
+            "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
+            "open_delay_minutes": "Minuten offen bis zum Abschalten",
+            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten"
+          }
+        }
+      },
+      "error": {
+        "no_thermostat": "Wähle mindestens ein Thermostat aus.",
+        "name_required": "Gib einen Namen ein.",
+        "name_exists": "Ein Raum mit diesem Namen existiert bereits."
+      },
+      "abort": {
+        "reconfigure_successful": "Raum aktualisiert."
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "absence_mode": {
+        "name": "Abwesenheitsmodus"
+      },
+      "period_override": {
+        "name": "Heizperiode erzwingen"
+      },
+      "door_warning": {
+        "name": "Türwarnung"
+      },
+      "opening_shutdown": {
+        "name": "Abschalten bei offener Tür/Fenster"
+      },
+      "absence_shutdown": {
+        "name": "Abschalten bei Raumabwesenheit"
+      },
+      "max_limit": {
+        "name": "Maximaltemperatur begrenzen"
+      },
+      "skip_setback": {
+        "name": "Absenkung überspringen"
+      }
+    },
+    "number": {
+      "frost_temp": {
+        "name": "Frostschutztemperatur"
+      },
+      "max_temp": {
+        "name": "Maximaltemperatur"
+      },
+      "comfort": {
+        "name": "Komforttemperatur"
+      },
+      "setback": {
+        "name": "Absenktemperatur"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "outside_period": "Außerhalb der Heizperiode",
+          "absence_mode": "Abwesenheitsmodus",
+          "opening": "Tür/Fenster offen",
+          "room_absent": "Raum nicht belegt",
+          "comfort": "Komfort",
+          "setback": "Absenkung",
+          "comfort_skipped": "Komfort (Absenkung übersprungen)"
+        }
+      },
+      "heating_period": {
+        "name": "Heizperiode",
+        "state": {
+          "active": "Aktiv",
+          "inactive": "Inaktiv"
+        }
+      }
+    },
+    "binary_sensor": {
+      "opening": {
+        "name": "Tür/Fenster offen"
+      }
+    },
+    "datetime": {
+      "return_at": {
+        "name": "Rückkehrzeit"
+      }
+    }
+  },
+  "services": {
+    "set_heating_period": {
+      "name": "Heizperiode festlegen",
+      "description": "Legt den ersten und letzten Tag der Heizperiode fest (Monat und Tag, jedes Jahr).",
+      "fields": {
+        "start_month": {
+          "name": "Startmonat",
+          "description": "Monat, in dem die Heizperiode beginnt."
+        },
+        "start_day": {
+          "name": "Starttag",
+          "description": "Tag des Monats, an dem die Heizperiode beginnt."
+        },
+        "end_month": {
+          "name": "Endmonat",
+          "description": "Monat, in dem die Heizperiode endet."
+        },
+        "end_day": {
+          "name": "Endtag",
+          "description": "Tag des Monats, an dem die Heizperiode endet (einschließlich)."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_date": {
+      "message": "{day}.{month}. ist kein gültiges Datum."
+    },
+    "not_loaded": {
+      "message": "Heat Pilot ist nicht geladen."
+    }
+  }
+}

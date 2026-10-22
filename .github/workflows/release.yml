@@ -1,0 +1,49 @@
+name: Auto Release on Version Bump
+
+# Creates a git tag + GitHub release as soon as the "version" in
+# custom_components/heat_pilot/manifest.json changes. HACS picks up new
+# releases and shows them in Home Assistant as an update.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "custom_components/heat_pilot/manifest.json"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Read version from manifest.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' custom_components/heat_pilot/manifest.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether the tag already exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --target "${{ github.sha }}"

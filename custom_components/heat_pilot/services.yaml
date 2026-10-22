@@ -1,0 +1,34 @@
+set_heating_period:
+  fields:
+    start_month:
+      required: true
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 12
+          mode: box
+    start_day:
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 31
+          mode: box
+    end_month:
+      required: true
+      example: 4
+      selector:
+        number:
+          min: 1
+          max: 12
+          mode: box
+    end_day:
+      required: true
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 31
+          mode: box

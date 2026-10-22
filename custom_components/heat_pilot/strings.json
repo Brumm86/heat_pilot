@@ -1,0 +1,163 @@
+{
+  "title": "Heat Pilot",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Heat Pilot",
+        "description": "Heat Pilot is set up once. Add your rooms afterwards from the integration's page (\"Add room\")."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Heat Pilot can only be set up once."
+    }
+  },
+  "config_subentries": {
+    "room": {
+      "initiate_flow": {
+        "user": "Add room",
+        "reconfigure": "Reconfigure room"
+      },
+      "entry_type": "Room",
+      "step": {
+        "user": {
+          "title": "Add room",
+          "description": "Define a room with its thermostats, schedule and optional door/window sensors and persons.",
+          "data": {
+            "name": "Room name",
+            "thermostats": "Thermostats",
+            "schedule": "Schedule (on = comfort, off = setback)",
+            "door_sensors": "Door sensors",
+            "window_sensors": "Window sensors",
+            "persons": "Persons (room is shut off when all are away)",
+            "open_delay_minutes": "Minutes open before shutting off",
+            "absence_delay_minutes": "Minutes away before shutting off"
+          }
+        },
+        "reconfigure": {
+          "title": "Reconfigure room",
+          "description": "Change the room's thermostats, schedule, sensors, persons and delays.",
+          "data": {
+            "name": "Room name",
+            "thermostats": "Thermostats",
+            "schedule": "Schedule (on = comfort, off = setback)",
+            "door_sensors": "Door sensors",
+            "window_sensors": "Window sensors",
+            "persons": "Persons (room is shut off when all are away)",
+            "open_delay_minutes": "Minutes open before shutting off",
+            "absence_delay_minutes": "Minutes away before shutting off"
+          }
+        }
+      },
+      "error": {
+        "no_thermostat": "Select at least one thermostat.",
+        "name_required": "Enter a name.",
+        "name_exists": "A room with this name already exists."
+      },
+      "abort": {
+        "reconfigure_successful": "Room updated."
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "absence_mode": {
+        "name": "Absence mode"
+      },
+      "period_override": {
+        "name": "Force heating period"
+      },
+      "door_warning": {
+        "name": "Door warning"
+      },
+      "opening_shutdown": {
+        "name": "Shut off when door/window open"
+      },
+      "absence_shutdown": {
+        "name": "Shut off when room absent"
+      },
+      "max_limit": {
+        "name": "Maximum temperature limit"
+      },
+      "skip_setback": {
+        "name": "Skip setback"
+      }
+    },
+    "number": {
+      "frost_temp": {
+        "name": "Frost protection temperature"
+      },
+      "max_temp": {
+        "name": "Maximum temperature"
+      },
+      "comfort": {
+        "name": "Comfort temperature"
+      },
+      "setback": {
+        "name": "Setback temperature"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "outside_period": "Outside heating period",
+          "absence_mode": "Absence mode",
+          "opening": "Door/window open",
+          "room_absent": "Room absent",
+          "comfort": "Comfort",
+          "setback": "Setback",
+          "comfort_skipped": "Comfort (setback skipped)"
+        }
+      },
+      "heating_period": {
+        "name": "Heating period",
+        "state": {
+          "active": "Active",
+          "inactive": "Inactive"
+        }
+      }
+    },
+    "binary_sensor": {
+      "opening": {
+        "name": "Door/window open"
+      }
+    },
+    "datetime": {
+      "return_at": {
+        "name": "Return time"
+      }
+    }
+  },
+  "services": {
+    "set_heating_period": {
+      "name": "Set heating period",
+      "description": "Sets the first and last day of the heating period (month and day, every year).",
+      "fields": {
+        "start_month": {
+          "name": "Start month",
+          "description": "Month the heating period starts."
+        },
+        "start_day": {
+          "name": "Start day",
+          "description": "Day of the month the heating period starts."
+        },
+        "end_month": {
+          "name": "End month",
+          "description": "Month the heating period ends."
+        },
+        "end_day": {
+          "name": "End day",
+          "description": "Day of the month the heating period ends (inclusive)."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_date": {
+      "message": "{day}.{month}. is not a valid date."
+    },
+    "not_loaded": {
+      "message": "Heat Pilot is not loaded."
+    }
+  }
+}

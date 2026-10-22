@@ -1,0 +1,14 @@
+{
+  "domain": "heat_pilot",
+  "name": "Heat Pilot",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Brumm86/heat_pilot",
+  "integration_type": "hub",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Brumm86/heat_pilot/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}
