@@ -13,7 +13,8 @@ class HeatPilotEntity(CoordinatorEntity[HeatPilotCoordinator]):
     """Base class: sets up naming, unique id and the device a entity sits on.
 
     Entities without ``room_id`` belong to the global "Heat Pilot" device;
-    entities with one belong to that room's device.
+    entities with one belong to that room's device. The link from the room
+    devices to the hub device (``via_device_id``) is set in ``async_setup_entry``.
     """
 
     _attr_has_entity_name = True
@@ -43,7 +44,6 @@ class HeatPilotEntity(CoordinatorEntity[HeatPilotCoordinator]):
                 name=coordinator.rooms[room_id].name,
                 manufacturer="Heat Pilot",
                 model="Room",
-                via_device=(DOMAIN, entry_id),
             )
 
     @property

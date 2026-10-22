@@ -124,14 +124,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: HeatPilotConfigEntry) ->
     await coordinator.async_setup()
     entry.runtime_data = coordinator
 
-    # The hub device must exist before room devices reference it via_device.
-    dr.async_get(hass).async_get_or_create(
+    # The hub device must exist before the room devices can point to it.
+    device_registry = dr.async_get(hass)
+    hub = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
         name="Heat Pilot",
         manufacturer="Heat Pilot",
         entry_type=dr.DeviceEntryType.SERVICE,
     )
+    for room_id, room in coordinator.rooms.items():
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, room_id)},
+            name=room.name,
+            manufacturer="Heat Pilot",
+            model="Room",
+            via_device_id=hub.id,
+        )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     notifier = HeatPilotNotifier(hass, coordinator, dict(entry.options))
     notifier.async_start()

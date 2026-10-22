@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Raumgeräte werden mit `via_device_id` an das Heat-Pilot-Gerät gehängt (statt des veralteten `via_device`; Warnung in Home Assistant, entfällt ab 2027.8).
+
 ## 0.3.0
 
 - Lovelace-Karte `heat-pilot-card` (wird automatisch geladen, keine Ressource nötig): Heizperiode (mit Bearbeiten), Abwesenheitsmodus mit Rückkehrzeit, Frostschutz und Maximaltemperatur, je Raum Status, Ist/Soll, Komfort/Absenkung, alle Raumschalter und „Plan bearbeiten“.
