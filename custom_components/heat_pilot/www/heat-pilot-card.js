@@ -380,8 +380,10 @@
         }
         html += "</div>";
       }
-      html += this._stepper(e.comfort, this._t("comfort"));
-      html += this._stepper(e.setback, this._t("setback"));
+      if ((attrs.thermostats || []).length) {
+        html += this._stepper(e.comfort, this._t("comfort"));
+        html += this._stepper(e.setback, this._t("setback"));
+      }
       var self = this;
       ROOM_SWITCHES.forEach(function (key) {
         if (e[key]) {

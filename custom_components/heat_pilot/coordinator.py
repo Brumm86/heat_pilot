@@ -63,6 +63,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ABSENCE_DELAY,
     CONF_DOOR_SENSORS,
+    CONF_EXTERNAL_HEATING,
     CONF_OPEN_DELAY,
     CONF_PERSONS,
     CONF_SCHEDULE,
@@ -103,12 +104,22 @@ class RoomConfig:
     room_id: str
     name: str
     thermostats: tuple[str, ...]
-    schedule: str
+    schedule: str | None
     door_sensors: tuple[str, ...]
     window_sensors: tuple[str, ...]
     persons: tuple[str, ...]
     open_delay: int
     absence_delay: int
+    # Room is (also) heated outside Home Assistant, e.g. by underfloor heating.
+    external_heating: bool = False
+
+    @property
+    def externally_heated(self) -> bool:
+        """Heat does not (only) come from the room's thermostats.
+
+        A room without any thermostat is heated externally by definition.
+        """
+        return self.external_heating or not self.thermostats
 
     @property
     def openings(self) -> tuple[str, ...]:
@@ -121,12 +132,13 @@ class RoomConfig:
             room_id=subentry.subentry_id,
             name=subentry.title,
             thermostats=tuple(data.get(CONF_THERMOSTATS, [])),
-            schedule=data[CONF_SCHEDULE],
+            schedule=data.get(CONF_SCHEDULE) or None,
             door_sensors=tuple(data.get(CONF_DOOR_SENSORS, [])),
             window_sensors=tuple(data.get(CONF_WINDOW_SENSORS, [])),
             persons=tuple(data.get(CONF_PERSONS, [])),
             open_delay=int(data.get(CONF_OPEN_DELAY, DEFAULT_OPEN_DELAY)),
             absence_delay=int(data.get(CONF_ABSENCE_DELAY, DEFAULT_ABSENCE_DELAY)),
+            external_heating=bool(data.get(CONF_EXTERNAL_HEATING, False)),
         )
 
 
@@ -219,7 +231,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                 room.thermostats
                 + room.openings
                 + room.persons
-                + (room.schedule,)
+                + ((room.schedule,) if room.schedule else ())
             )
             for entity_id in tracked:
                 self._entity_rooms.setdefault(entity_id, set()).add(room.room_id)
@@ -366,7 +378,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             persons_away_beyond_delay=self._elapsed(
                 self._away_since.get(room.room_id), now, room.absence_delay
             ),
-            schedule_on=self._state(room.schedule) == "on",
+            schedule_on=room.schedule is not None and self._state(room.schedule) == "on",
             skip_setback=bool(r["skip_setback"]),
             comfort_temp=float(r["comfort"]),
             setback_temp=float(r["setback"]),
@@ -386,7 +398,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             if self._state(e) is None or self._state(e) in _NOT_REPORTING
         )
         next_event = None
-        if schedule := self.hass.states.get(room.schedule):
+        schedule = self.hass.states.get(room.schedule) if room.schedule else None
+        if schedule:
             raw = schedule.attributes.get("next_event")
             next_event = raw.isoformat() if isinstance(raw, datetime) else raw
         return RoomStatus(

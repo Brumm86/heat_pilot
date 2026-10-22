@@ -18,6 +18,7 @@ CONF_WINDOW_SENSORS = "window_sensors"
 CONF_PERSONS = "persons"
 CONF_OPEN_DELAY = "open_delay_minutes"
 CONF_ABSENCE_DELAY = "absence_delay_minutes"
+CONF_EXTERNAL_HEATING = "external_heating"
 
 DEFAULT_OPEN_DELAY = 3  # minutes a door/window may be open before shutdown
 DEFAULT_ABSENCE_DELAY = 15  # minutes all persons must be away before shutdown

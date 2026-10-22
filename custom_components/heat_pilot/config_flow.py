@@ -21,6 +21,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -36,6 +37,7 @@ from .const import (
     CONF_ADMIN_NOTIFY,
     CONF_DASHBOARD_PATH,
     CONF_DOOR_SENSORS,
+    CONF_EXTERNAL_HEATING,
     CONF_OPEN_DELAY,
     CONF_OVERHEAT_DELTA,
     CONF_OVERHEAT_MINUTES,
@@ -65,12 +67,13 @@ def _room_schema() -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_NAME): TextSelector(),
-            vol.Required(CONF_THERMOSTATS, default=[]): EntitySelector(
+            vol.Optional(CONF_THERMOSTATS, default=[]): EntitySelector(
                 EntitySelectorConfig(domain="climate", multiple=True)
             ),
-            vol.Required(CONF_SCHEDULE): EntitySelector(
+            vol.Optional(CONF_SCHEDULE): EntitySelector(
                 EntitySelectorConfig(domain="schedule")
             ),
+            vol.Optional(CONF_EXTERNAL_HEATING, default=False): BooleanSelector(),
             vol.Optional(CONF_DOOR_SENSORS, default=[]): EntitySelector(
                 EntitySelectorConfig(domain="binary_sensor", multiple=True)
             ),
@@ -176,8 +179,12 @@ class RoomSubentryFlow(ConfigSubentryFlow):
         self, entry: ConfigEntry, step_id: str, user_input: dict[str, Any]
     ) -> dict[str, str]:
         errors: dict[str, str] = {}
-        if not user_input.get(CONF_THERMOSTATS):
+        thermostats = user_input.get(CONF_THERMOSTATS)
+        external = user_input.get(CONF_EXTERNAL_HEATING, False)
+        if not thermostats and not external:
             errors[CONF_THERMOSTATS] = "no_thermostat"
+        if thermostats and not user_input.get(CONF_SCHEDULE):
+            errors[CONF_SCHEDULE] = "schedule_required"
 
         name = user_input[CONF_NAME].strip()
         if not name:

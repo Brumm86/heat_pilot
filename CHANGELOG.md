@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Neue Raumoption „Raum wird anders beheizt (z. B. Fußbodenheizung)“: Die Türwarnung wird dann auch ausgelöst, wenn der Raum heute nicht über ein Thermostat geheizt hat (bisher unterdrückt, solange der Raum aus war und heute nicht beheizt wurde). Die Beschränkung auf die Heizperiode bleibt.
+- Räume ohne Thermostat sind jetzt möglich (nur Tür-/Fenstersensoren und Personen); sie gelten automatisch als anders beheizt. Der Zeitplan ist nur noch mit Thermostaten nötig. Die Karte blendet Komfort/Absenkung für solche Räume aus.
+- Bestehende Räume bleiben unverändert (Option standardmäßig aus).
+
 ## 0.3.1
 
 - Raumgeräte werden mit `via_device_id` an das Heat-Pilot-Gerät gehängt (statt des veralteten `via_device`; Warnung in Home Assistant, entfällt ab 2027.8).

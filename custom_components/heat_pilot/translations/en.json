@@ -44,13 +44,14 @@
           "description": "Define a room with its thermostats, schedule and optional door/window sensors and persons.",
           "data": {
             "name": "Room name",
-            "thermostats": "Thermostats",
-            "schedule": "Schedule (on = comfort, off = setback)",
+            "thermostats": "Thermostats (leave empty if the room is not heated by thermostats)",
+            "schedule": "Schedule (on = comfort, off = setback; only needed with thermostats)",
             "door_sensors": "Door sensors",
             "window_sensors": "Window sensors",
             "persons": "Persons (room is shut off when all are away)",
             "open_delay_minutes": "Minutes open before shutting off",
-            "absence_delay_minutes": "Minutes away before shutting off"
+            "absence_delay_minutes": "Minutes away before shutting off",
+            "external_heating": "Room is heated differently (e.g. underfloor heating): door warning even without heating via thermostat"
           }
         },
         "reconfigure": {
@@ -58,20 +59,22 @@
           "description": "Change the room's thermostats, schedule, sensors, persons and delays.",
           "data": {
             "name": "Room name",
-            "thermostats": "Thermostats",
-            "schedule": "Schedule (on = comfort, off = setback)",
+            "thermostats": "Thermostats (leave empty if the room is not heated by thermostats)",
+            "schedule": "Schedule (on = comfort, off = setback; only needed with thermostats)",
             "door_sensors": "Door sensors",
             "window_sensors": "Window sensors",
             "persons": "Persons (room is shut off when all are away)",
             "open_delay_minutes": "Minutes open before shutting off",
-            "absence_delay_minutes": "Minutes away before shutting off"
+            "absence_delay_minutes": "Minutes away before shutting off",
+            "external_heating": "Room is heated differently (e.g. underfloor heating): door warning even without heating via thermostat"
           }
         }
       },
       "error": {
         "no_thermostat": "Select at least one thermostat.",
         "name_required": "Enter a name.",
-        "name_exists": "A room with this name already exists."
+        "name_exists": "A room with this name already exists.",
+        "schedule_required": "Select a schedule."
       },
       "abort": {
         "reconfigure_successful": "Room updated."

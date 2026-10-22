@@ -31,7 +31,9 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 ## Raum-Einstellungen
 
-Thermostate (mindestens eines), Zeitplan, Tür- und Fenstersensoren, Personen, Wartezeit bei offener Tür/Fenster (Standard 3 min), Wartezeit bei Abwesenheit (Standard 15 min).
+Thermostate, Zeitplan (nur mit Thermostaten nötig), Tür- und Fenstersensoren, Personen, Wartezeit bei offener Tür/Fenster (Standard 3 min), Wartezeit bei Abwesenheit (Standard 15 min).
+
+**Raum wird anders beheizt** (z. B. Fußbodenheizung, die in Home Assistant nicht abgebildet ist): Mit dieser Option wird die Türwarnung auch ausgelöst, wenn der Raum heute nicht über ein Thermostat geheizt hat. Ein Raum ganz ohne Thermostat gilt automatisch als anders beheizt; dann reichen Name und Türsensor(en).
 
 ## Lovelace-Karte
 
@@ -47,7 +49,7 @@ Die Karte findet alle Räume selbst. „Plan bearbeiten“ öffnet den Zeitplan-
 
 Einstellungen → Heat Pilot → Konfigurieren: Admin-Handy, Handy je Person (feste Zuordnung), Wartezeiten und Dashboard-Pfad.
 
-- **Türwarnung** (je Raum schaltbar): nach der Wartezeit des Raums, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde. Verschwindet, sobald die Tür zu ist.
+- **Türwarnung** (je Raum schaltbar): nach der Wartezeit des Raums, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen, die als „anders beheizt“ gelten). Verschwindet, sobald die Tür zu ist.
 - **Lüftungserinnerung**: einmalig, wenn ein Fenster die Heizung abgeschaltet hat und weiterhin offen ist (Standard 15 Minuten).
 - **Störungsmeldungen** (nur Admin-Handy): Tür-/Fenstersensor oder Thermostat nicht erreichbar (Standard 30 Minuten), Überhitzung (Standard mehr als 3 K über Sollwert für 45 Minuten). Wiederholung alle 6 Stunden, nur zwischen 08:00 und 22:00.
 

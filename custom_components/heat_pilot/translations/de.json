@@ -44,13 +44,14 @@
           "description": "Lege einen Raum mit Thermostaten, Zeitplan und optionalen Tür-/Fenstersensoren und Personen an.",
           "data": {
             "name": "Raumname",
-            "thermostats": "Thermostate",
-            "schedule": "Zeitplan (an = Komfort, aus = Absenkung)",
+            "thermostats": "Thermostate (leer lassen, wenn der Raum nicht über Thermostate beheizt wird)",
+            "schedule": "Zeitplan (an = Komfort, aus = Absenkung; nur mit Thermostaten nötig)",
             "door_sensors": "Türsensoren",
             "window_sensors": "Fenstersensoren",
             "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
             "open_delay_minutes": "Minuten offen bis zum Abschalten",
-            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten"
+            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten",
+            "external_heating": "Raum wird anders beheizt (z. B. Fußbodenheizung): Türwarnung auch ohne Heizen über Thermostat"
           }
         },
         "reconfigure": {
@@ -58,20 +59,22 @@
           "description": "Ändere Thermostate, Zeitplan, Sensoren, Personen und Wartezeiten des Raums.",
           "data": {
             "name": "Raumname",
-            "thermostats": "Thermostate",
-            "schedule": "Zeitplan (an = Komfort, aus = Absenkung)",
+            "thermostats": "Thermostate (leer lassen, wenn der Raum nicht über Thermostate beheizt wird)",
+            "schedule": "Zeitplan (an = Komfort, aus = Absenkung; nur mit Thermostaten nötig)",
             "door_sensors": "Türsensoren",
             "window_sensors": "Fenstersensoren",
             "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
             "open_delay_minutes": "Minuten offen bis zum Abschalten",
-            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten"
+            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten",
+            "external_heating": "Raum wird anders beheizt (z. B. Fußbodenheizung): Türwarnung auch ohne Heizen über Thermostat"
           }
         }
       },
       "error": {
         "no_thermostat": "Wähle mindestens ein Thermostat aus.",
         "name_required": "Gib einen Namen ein.",
-        "name_exists": "Ein Raum mit diesem Namen existiert bereits."
+        "name_exists": "Ein Raum mit diesem Namen existiert bereits.",
+        "schedule_required": "Wähle einen Zeitplan aus."
       },
       "abort": {
         "reconfigure_successful": "Raum aktualisiert."

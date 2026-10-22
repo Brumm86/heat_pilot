@@ -77,21 +77,23 @@ def _thermostat(hass: HomeAssistant, current: float = 19.0, target: float = 21.0
     )
 
 
-async def _setup(hass: HomeAssistant) -> None:
+async def _setup(
+    hass: HomeAssistant, room_data: dict | None = None, *, wants_heat: bool = True
+) -> None:
     await hass.config.async_set_time_zone("UTC")
     hass.states.async_set("schedule.room", "on")
     hass.states.async_set(DOOR, "off")
     hass.states.async_set(WINDOW, "off")
     hass.states.async_set(PERSON_A, "home")
     hass.states.async_set(PERSON_B, "not_home")
-    _thermostat(hass)
+    _thermostat(hass) if wants_heat else _thermostat(hass, current=22.0, target=21.0)
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={},
         options=OPTIONS,
         subentries_data=[
             ConfigSubentryData(
-                data=ROOM_DATA, subentry_type=SUBENTRY_ROOM, title="Room", unique_id=None
+                data=room_data or ROOM_DATA, subentry_type=SUBENTRY_ROOM, title="Room", unique_id=None
             )
         ],
     )
@@ -142,6 +144,40 @@ async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
     await _advance(hass, freezer, seconds=30)
     cleared = [c for _, c in sent if c.data["message"] == "clear_notification"]
     assert {c.data["data"]["tag"] for c in cleared} == {data["tag"]}
+
+
+async def test_no_door_warning_when_room_not_heated_by_thermostat(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass, wants_heat=False)
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=30)
+    assert not _messages(sent, "mobile_app_alice")
+
+
+async def test_door_warning_for_externally_heated_room(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass, {**ROOM_DATA, "external_heating": True}, wants_heat=False)
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=30)
+    assert len(_messages(sent, "mobile_app_alice")) == 3
+
+
+async def test_door_warning_for_room_without_thermostat(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    room = {k: v for k, v in ROOM_DATA.items() if k != "schedule"}
+    await _setup(hass, {**room, "thermostats": []})
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=30)
+    assert len(_messages(sent, "mobile_app_alice")) == 3
 
 
 async def test_no_door_warning_outside_heating_period(

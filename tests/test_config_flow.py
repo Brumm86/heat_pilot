@@ -75,6 +75,41 @@ async def test_room_requires_thermostat(hass: HomeAssistant) -> None:
     assert result["errors"] == {"thermostats": "no_thermostat"}
 
 
+async def test_room_without_thermostat_needs_external_heating(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_entry(hass)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ROOM), context={"source": "user"}
+    )
+    base = {k: v for k, v in ROOM_INPUT.items() if k != "schedule"}
+    base["thermostats"] = []
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], base
+    )
+    assert result["errors"] == {"thermostats": "no_thermostat"}
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**base, "external_heating": True}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["external_heating"] is True
+    assert subentry.data["thermostats"] == []
+
+
+async def test_thermostat_requires_schedule(hass: HomeAssistant) -> None:
+    entry = await _setup_entry(hass)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ROOM), context={"source": "user"}
+    )
+    no_schedule = {k: v for k, v in ROOM_INPUT.items() if k != "schedule"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], no_schedule
+    )
+    assert result["errors"] == {"schedule": "schedule_required"}
+
+
 async def test_room_name_must_be_unique(hass: HomeAssistant) -> None:
     entry = await _setup_entry(hass)
     for expected in (FlowResultType.CREATE_ENTRY, FlowResultType.FORM):

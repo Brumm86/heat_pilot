@@ -175,6 +175,7 @@ class HeatPilotNotifier:
             if (
                 features.get(FEATURE_OPENING_SHUTDOWN)
                 and status is not None
+                and room.thermostats
                 and status.decision.reason is Reason.OPENING
                 and (since := self._open_since(room.window_sensors))
             ):
@@ -215,6 +216,11 @@ class HeatPilotNotifier:
             return False
         if not self.coordinator.period_active_today():
             return True
+        room = self.coordinator.rooms.get(room_id)
+        if kind == "door" and room is not None and room.externally_heated:
+            # Heated outside Home Assistant (e.g. underfloor heating): the
+            # thermostats say nothing about whether the room is heated.
+            return False
         status = (self.coordinator.data or {}).get(room_id)
         if status is None:
             return False
