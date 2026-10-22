@@ -11,6 +11,26 @@
       "single_instance_allowed": "Heat Pilot kann nur einmal eingerichtet werden."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Benachrichtigungen",
+        "description": "Türwarnungen und Erinnerungen gehen an die Handys der Personen, die zu Hause sind. Störungsmeldungen gehen nur an das Admin-Handy.",
+        "data": {
+          "admin_notify": "Admin-Handy (Störungsmeldungen)",
+          "ventilation_delay": "Lüftungserinnerung nach (Minuten)",
+          "unavailable_delay": "Störungsmeldung nach Nichterreichbarkeit von (Minuten)",
+          "overheat_delta": "Überhitzung: Kelvin über Sollwert",
+          "overheat_minutes": "Überhitzung: mindestens (Minuten)",
+          "dashboard_path": "Dashboard-Pfad beim Antippen einer Benachrichtigung"
+        }
+      },
+      "persons": {
+        "title": "Handy je Person",
+        "description": "Wähle den Benachrichtigungsdienst des Handys jeder Person. Leer lassen, um eine Person nicht zu benachrichtigen."
+      }
+    }
+  },
   "config_subentries": {
     "room": {
       "initiate_flow": {

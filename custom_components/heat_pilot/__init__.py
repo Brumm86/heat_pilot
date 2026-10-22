@@ -22,6 +22,7 @@ from .const import (
     SERVICE_SET_HEATING_PERIOD,
 )
 from .coordinator import HeatPilotCoordinator
+from .notifier import HeatPilotNotifier
 from .storage import HeatPilotStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,6 +103,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HeatPilotConfigEntry) ->
         entry_type=dr.DeviceEntryType.SERVICE,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    notifier = HeatPilotNotifier(hass, coordinator, dict(entry.options))
+    notifier.async_start()
+    entry.async_on_unload(notifier.async_stop)
     # Adding, changing or removing a room (subentry) reloads the entry.
     entry.async_on_unload(entry.add_update_listener(_async_reload_on_update))
     return True

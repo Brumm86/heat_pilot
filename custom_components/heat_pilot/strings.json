@@ -11,6 +11,26 @@
       "single_instance_allowed": "Heat Pilot can only be set up once."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Notifications",
+        "description": "Door warnings and reminders go to the phones of persons at home. Fault alerts go only to the admin phone.",
+        "data": {
+          "admin_notify": "Admin phone (fault alerts)",
+          "ventilation_delay": "Ventilation reminder after (minutes)",
+          "unavailable_delay": "Fault alert after unreachable for (minutes)",
+          "overheat_delta": "Overheating: kelvin above setpoint",
+          "overheat_minutes": "Overheating: for at least (minutes)",
+          "dashboard_path": "Dashboard path opened when tapping a notification"
+        }
+      },
+      "persons": {
+        "title": "Phone per person",
+        "description": "Choose the notification service of each person's phone. Leave empty to not notify a person."
+      }
+    }
+  },
   "config_subentries": {
     "room": {
       "initiate_flow": {

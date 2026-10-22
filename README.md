@@ -12,6 +12,7 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 - Heizperiode (feste Daten, außerhalb bleibt alles aus)
 - Maximaltemperatur-Begrenzung pro Raum
 - Nicht verfügbare Sensoren gelten als geschlossen
+- Benachrichtigungen aufs Handy (Android Companion App): Türwarnung, Lüftungserinnerung, Störungsmeldungen
 
 ## Prioritäten (höchste zuerst)
 
@@ -32,6 +33,14 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 Thermostate (mindestens eines), Zeitplan, Tür- und Fenstersensoren, Personen, Wartezeit bei offener Tür/Fenster (Standard 3 min), Wartezeit bei Abwesenheit (Standard 15 min).
 
+## Benachrichtigungen
+
+Einstellungen → Heat Pilot → Konfigurieren: Admin-Handy, Handy je Person (feste Zuordnung), Wartezeiten und Dashboard-Pfad.
+
+- **Türwarnung** (je Raum schaltbar): nach der Wartezeit des Raums, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde. Verschwindet, sobald die Tür zu ist.
+- **Lüftungserinnerung**: einmalig, wenn ein Fenster die Heizung abgeschaltet hat und weiterhin offen ist (Standard 15 Minuten).
+- **Störungsmeldungen** (nur Admin-Handy): Tür-/Fenstersensor oder Thermostat nicht erreichbar (Standard 30 Minuten), Überhitzung (Standard mehr als 3 K über Sollwert für 45 Minuten). Wiederholung alle 6 Stunden, nur zwischen 08:00 und 22:00.
+
 ## Dienst
 
 `heat_pilot.set_heating_period` – setzt Start und Ende der Heizperiode (Monat und Tag, Standard 1.10.–30.4.).
@@ -43,4 +52,4 @@ pip install -r requirements_test.txt
 pytest
 ```
 
-Geplant: Benachrichtigungen (Türwarnung, Lüftungserinnerung, Störungsmeldungen) und eine Lovelace-Karte.
+Geplant: Lovelace-Karte.

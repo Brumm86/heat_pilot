@@ -50,3 +50,25 @@ ATTR_START_MONTH = "start_month"
 ATTR_START_DAY = "start_day"
 ATTR_END_MONTH = "end_month"
 ATTR_END_DAY = "end_day"
+
+# Notification options (stored in the main entry's options).
+CONF_ADMIN_NOTIFY = "admin_notify"
+CONF_PERSON_NOTIFY = "person_notify"
+CONF_VENTILATION_DELAY = "ventilation_delay"
+CONF_UNAVAILABLE_DELAY = "unavailable_delay"
+CONF_OVERHEAT_DELTA = "overheat_delta"
+CONF_OVERHEAT_MINUTES = "overheat_minutes"
+CONF_DASHBOARD_PATH = "dashboard_path"
+
+DEFAULT_VENTILATION_DELAY = 15  # minutes a window may stay open before the reminder
+DEFAULT_UNAVAILABLE_DELAY = 30  # minutes a device may be unreachable before an alert
+DEFAULT_OVERHEAT_DELTA = 3.0  # kelvin above the setpoint
+DEFAULT_OVERHEAT_MINUTES = 45
+DEFAULT_DASHBOARD_PATH = "/"
+
+# Door warning: first after the room's open delay, then every 3 minutes, max 3.
+DOOR_WARNING_REPEAT_MINUTES = 3
+DOOR_WARNING_MAX = 3
+# Admin alerts repeat every 6 hours, but only between 08:00 and 22:00.
+ADMIN_REPEAT_HOURS = 6
+ADMIN_WINDOW = (8, 22)

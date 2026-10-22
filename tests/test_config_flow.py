@@ -86,3 +86,32 @@ async def test_room_name_must_be_unique(hass: HomeAssistant) -> None:
         )
         assert result["type"] is expected
     assert result["errors"] == {"name": "name_exists"}
+
+
+async def test_options_flow_maps_persons_to_phones(hass: HomeAssistant) -> None:
+    hass.states.async_set("person.alice", "home")
+    hass.services.async_register("notify", "mobile_app_alice", lambda call: None)
+    hass.services.async_register("notify", "mobile_app_admin", lambda call: None)
+    entry = await _setup_entry(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == "init"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "admin_notify": "mobile_app_admin",
+            "ventilation_delay": 15,
+            "unavailable_delay": 30,
+            "overheat_delta": 3,
+            "overheat_minutes": 45,
+            "dashboard_path": "/dash",
+        },
+    )
+    assert result["step_id"] == "persons"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"person.alice": "mobile_app_alice"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["person_notify"] == {"person.alice": "mobile_app_alice"}
+    assert entry.options["admin_notify"] == "mobile_app_admin"
+    assert entry.options["dashboard_path"] == "/dash"
