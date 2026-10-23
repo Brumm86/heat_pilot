@@ -137,8 +137,8 @@ async def test_options_flow_maps_persons_to_phones(hass: HomeAssistant) -> None:
             "admin_notify": "mobile_app_admin",
             "ventilation_delay": 15,
             "unavailable_delay": 30,
-            "overheat_delta": 3,
-            "overheat_minutes": 45,
+            "overheat_temp": 25,
+            "overheat_hold_minutes": 15,
             "dashboard_path": "/dash",
         },
     )

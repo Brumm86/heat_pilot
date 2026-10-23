@@ -9,6 +9,7 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentryData
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -36,8 +37,8 @@ OPTIONS = {
     "person_notify": {PERSON_A: "mobile_app_alice", PERSON_B: "mobile_app_bob"},
     "ventilation_delay": 15,
     "unavailable_delay": 30,
-    "overheat_delta": 3.0,
-    "overheat_minutes": 45,
+    "overheat_temp": 25.0,
+    "overheat_hold_minutes": 15,
     "dashboard_path": "/dashboard-heat",
 }
 
@@ -138,8 +139,10 @@ async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
 
     hass.states.async_set(DOOR, "on")
     await hass.async_block_till_done()
-    await _advance(hass, freezer, minutes=2)
+    await _advance(hass, freezer, minutes=4)  # room shutdown delay (3 min) is not the warning delay
     assert not _messages(sent, "mobile_app_alice")
+    await _advance(hass, freezer, minutes=1, seconds=15)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
 
     await _advance(hass, freezer, minutes=30)
     alice = _messages(sent, "mobile_app_alice")
@@ -251,13 +254,70 @@ async def test_admin_alert_postponed_to_morning(
     assert len(_messages(sent, "mobile_app_admin")) == 1
 
 
-async def test_overheating_alert(
+async def test_thermostat_at_25_degrees_for_15_minutes_alerts_admin(
     hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
 ) -> None:
     freezer.move_to("2026-11-10 12:00:00+00:00")
     await _setup(hass)
     _thermostat(hass, current=25.0, target=21.0)
-    await _advance(hass, freezer, minutes=44)
+    await _advance(hass, freezer, minutes=14)
     assert not _messages(sent, "mobile_app_admin")
     await _advance(hass, freezer, minutes=2)
     assert len(_messages(sent, "mobile_app_admin")) == 1
+    assert not _messages(sent, "mobile_app_alice")
+
+
+async def test_thermostat_cooling_down_resets_the_timer(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    _thermostat(hass, current=25.5, target=21.0)
+    await _advance(hass, freezer, minutes=10)
+    _thermostat(hass, current=24.5, target=21.0)
+    await _advance(hass, freezer, minutes=1)
+    _thermostat(hass, current=25.5, target=21.0)
+    await _advance(hass, freezer, minutes=14)
+    assert not _messages(sent, "mobile_app_admin")
+
+
+async def test_no_hot_thermostat_alert_outside_heating_period(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-07-10 12:00:00+00:00")
+    await _setup(hass)
+    _thermostat(hass, current=27.0, target=21.0)
+    await _advance(hass, freezer, hours=2)
+    assert not _messages(sent, "mobile_app_admin")
+
+
+async def test_unavailable_thermostat_does_not_alert(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    hass.states.async_set(THERMOSTAT, "unavailable")
+    await _advance(hass, freezer, hours=2)
+    assert not _messages(sent, "mobile_app_admin")
+
+
+async def test_pair_button_opens_zha_network(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    calls: list[ServiceCall] = []
+
+    async def _permit(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("zha", "permit", _permit)
+    await hass.services.async_call(
+        "button", "press", {"entity_id": "button.heat_pilot_pair_door_sensor"}, blocking=True
+    )
+    assert [c.data for c in calls] == [{"duration": 120}]
+
+
+async def test_pair_button_without_zha_raises(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": "button.heat_pilot_pair_door_sensor"}, blocking=True
+        )

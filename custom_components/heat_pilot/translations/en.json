@@ -19,10 +19,10 @@
         "data": {
           "admin_notify": "Admin phone (fault alerts)",
           "ventilation_delay": "Ventilation reminder after (minutes)",
-          "unavailable_delay": "Fault alert after unreachable for (minutes)",
-          "overheat_delta": "Overheating: kelvin above setpoint",
-          "overheat_minutes": "Overheating: for at least (minutes)",
-          "dashboard_path": "Dashboard path opened when tapping a notification"
+          "unavailable_delay": "Fault alert after a door/window sensor is unreachable for (minutes)",
+          "dashboard_path": "Dashboard path opened when tapping a notification",
+          "overheat_temp": "Thermostat warning: measured temperature from (°C)",
+          "overheat_hold_minutes": "Thermostat warning: for at least (minutes)"
         }
       },
       "persons": {
@@ -149,6 +149,11 @@
       "return_at": {
         "name": "Return time"
       }
+    },
+    "button": {
+      "pair_door_sensor": {
+        "name": "Pair door sensor"
+      }
     }
   },
   "services": {
@@ -181,6 +186,9 @@
     },
     "not_loaded": {
       "message": "Heat Pilot is not loaded."
+    },
+    "zha_missing": {
+      "message": "The ZHA integration is not loaded; pairing mode cannot be started."
     }
   }
 }

@@ -57,22 +57,27 @@ CONF_ADMIN_NOTIFY = "admin_notify"
 CONF_PERSON_NOTIFY = "person_notify"
 CONF_VENTILATION_DELAY = "ventilation_delay"
 CONF_UNAVAILABLE_DELAY = "unavailable_delay"
-CONF_OVERHEAT_DELTA = "overheat_delta"
-CONF_OVERHEAT_MINUTES = "overheat_minutes"
+CONF_OVERHEAT_TEMP = "overheat_temp"
+CONF_OVERHEAT_MINUTES = "overheat_hold_minutes"
 CONF_DASHBOARD_PATH = "dashboard_path"
 
 DEFAULT_VENTILATION_DELAY = 15  # minutes a window may stay open before the reminder
 DEFAULT_UNAVAILABLE_DELAY = 30  # minutes a device may be unreachable before an alert
-DEFAULT_OVERHEAT_DELTA = 3.0  # kelvin above the setpoint
-DEFAULT_OVERHEAT_MINUTES = 45
+DEFAULT_OVERHEAT_TEMP = 25.0  # a thermostat measuring this much is suspect (stuck valve)
+DEFAULT_OVERHEAT_MINUTES = 15  # ... if it does so for at least this long
 DEFAULT_DASHBOARD_PATH = "/"
 
-# Door warning: first after the room's open delay, then every 3 minutes, max 3.
+# Door warning: first after 5 minutes open, then every 3 minutes, max 3.
+# (Independent of the room's shutdown delay.)
+DOOR_WARNING_DELAY_MINUTES = 5
 DOOR_WARNING_REPEAT_MINUTES = 3
 DOOR_WARNING_MAX = 3
 # Admin alerts repeat every 6 hours, but only between 08:00 and 22:00.
 ADMIN_REPEAT_HOURS = 6
 ADMIN_WINDOW = (8, 22)
+
+# How long the ZHA network stays open for (re-)pairing a door sensor.
+PAIRING_DURATION_SECONDS = 120
 
 # Lovelace card, served from the integration's www folder.
 CARD_FILENAME = "heat-pilot-card.js"

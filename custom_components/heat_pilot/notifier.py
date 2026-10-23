@@ -20,22 +20,23 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .alerts import Episode, Plan, is_due, is_overheating
+from .alerts import Episode, Plan, is_due, is_too_hot
 from .const import (
     ADMIN_REPEAT_HOURS,
     ADMIN_WINDOW,
     CONF_ADMIN_NOTIFY,
     CONF_DASHBOARD_PATH,
-    CONF_OVERHEAT_DELTA,
     CONF_OVERHEAT_MINUTES,
+    CONF_OVERHEAT_TEMP,
     CONF_PERSON_NOTIFY,
     CONF_UNAVAILABLE_DELAY,
     CONF_VENTILATION_DELAY,
     DEFAULT_DASHBOARD_PATH,
-    DEFAULT_OVERHEAT_DELTA,
     DEFAULT_OVERHEAT_MINUTES,
+    DEFAULT_OVERHEAT_TEMP,
     DEFAULT_UNAVAILABLE_DELAY,
     DEFAULT_VENTILATION_DELAY,
+    DOOR_WARNING_DELAY_MINUTES,
     DOOR_WARNING_MAX,
     DOOR_WARNING_REPEAT_MINUTES,
     FEATURE_DOOR_WARNING,
@@ -70,7 +71,8 @@ _TEXT = {
         "alert_title": "Heat Pilot Störung",
         "unavailable": "{name} ({room}) ist seit {minutes} Min. nicht erreichbar.",
         "overheat": (
-            "{room}: {name} liegt seit {minutes} Min. mehr als {delta} K über dem Sollwert."
+            "{room}: {name} misst seit {minutes} Min. mindestens {temp} °C. "
+            "Möglicherweise ist das Thermostat bzw. Ventil defekt."
         ),
     },
     "en": {
@@ -84,8 +86,8 @@ _TEXT = {
         "alert_title": "Heat Pilot fault",
         "unavailable": "{name} ({room}) has been unreachable for {minutes} min.",
         "overheat": (
-            "{room}: {name} has been more than {delta} K above its setpoint "
-            "for {minutes} min."
+            "{room}: {name} has been measuring at least {temp} °C for "
+            "{minutes} min. The thermostat or valve may be faulty."
         ),
     },
 }
@@ -109,7 +111,7 @@ class HeatPilotNotifier:
         self._unavail_delay = int(
             options.get(CONF_UNAVAILABLE_DELAY, DEFAULT_UNAVAILABLE_DELAY)
         )
-        self._overheat_delta = float(options.get(CONF_OVERHEAT_DELTA, DEFAULT_OVERHEAT_DELTA))
+        self._overheat_temp = float(options.get(CONF_OVERHEAT_TEMP, DEFAULT_OVERHEAT_TEMP))
         self._overheat_minutes = int(
             options.get(CONF_OVERHEAT_MINUTES, DEFAULT_OVERHEAT_MINUTES)
         )
@@ -136,7 +138,7 @@ class HeatPilotNotifier:
     def _plan(self, kind: str, room: RoomConfig | None) -> Plan:
         if kind == "door" and room is not None:
             return Plan(
-                first_delay=timedelta(minutes=room.open_delay),
+                first_delay=timedelta(minutes=DOOR_WARNING_DELAY_MINUTES),
                 repeat=timedelta(minutes=DOOR_WARNING_REPEAT_MINUTES),
                 max_sent=DOOR_WARNING_MAX,
             )
@@ -189,7 +191,10 @@ class HeatPilotNotifier:
             ):
                 active[("vent", room.room_id)] = (since, {"room": room.name})
 
-            for entity_id in room.openings + room.thermostats:
+            # Only door/window sensors are watched for availability: the
+            # thermostats (tado) report "unavailable" too often for that to
+            # say anything about a real failure.
+            for entity_id in room.openings:
                 state = self._state(entity_id)
                 if state is not None and state.state == STATE_UNAVAILABLE:
                     active[("unavailable", entity_id)] = (
@@ -199,11 +204,9 @@ class HeatPilotNotifier:
 
             for entity_id in room.thermostats:
                 state = self._state(entity_id)
-                if state is not None and is_overheating(
-                    state.state,
-                    state.attributes.get("temperature"),
+                if state is not None and is_too_hot(
                     state.attributes.get("current_temperature"),
-                    self._overheat_delta,
+                    self._overheat_temp,
                 ):
                     active[("overheat", entity_id)] = (
                         now,
@@ -220,6 +223,9 @@ class HeatPilotNotifier:
     def _suppressed(self, key: Key) -> bool:
         """Door/ventilation messages only make sense while heating matters."""
         kind, room_id = key
+        if kind == "overheat":
+            # A warm room in summer is no sign of a stuck valve.
+            return not self.coordinator.period_active_today()
         if kind not in ("door", "vent"):
             return False
         if not self.coordinator.period_active_today():
@@ -314,7 +320,7 @@ class HeatPilotNotifier:
         name = self._name(ctx["entity_id"])
         template = text["unavailable" if kind == "unavailable" else "overheat"]
         message = template.format(
-            name=name, room=room, minutes=minutes, delta=self._overheat_delta
+            name=name, room=room, minutes=minutes, temp=f"{self._overheat_temp:g}"
         )
         data = {
             "tag": f"heat_pilot_{kind}_{key[1]}",

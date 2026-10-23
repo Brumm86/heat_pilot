@@ -33,6 +33,9 @@
       end_day: "Endtag",
       end_month: "Endmonat",
       period_override: "Heizperiode erzwingen",
+      pair_door_sensor: "Türsensor neu anlernen",
+      pair_start: "Anlernmodus starten",
+      pair_started: "Anlernmodus aktiv (2 Min.)",
       frost_temp: "Frostschutz",
       max_temp: "Maximaltemperatur",
       comfort: "Komfort",
@@ -68,6 +71,9 @@
       end_day: "End day",
       end_month: "End month",
       period_override: "Force heating period",
+      pair_door_sensor: "Re-pair door sensor",
+      pair_start: "Start pairing mode",
+      pair_started: "Pairing mode active (2 min)",
       frost_temp: "Frost protection",
       max_temp: "Maximum temperature",
       comfort: "Comfort",
@@ -379,6 +385,12 @@
       }
       html += this._stepper(g.frost_temp, this._t("frost_temp"));
       html += this._stepper(g.max_temp, this._t("max_temp"));
+      if (this._state(g.pair_door_sensor)) {
+        html +=
+          '<div class="row"><span>' + esc(this._t("pair_door_sensor")) + "</span>" +
+          '<button class="link" data-act="press" data-ent="' + esc(g.pair_door_sensor) + '">' +
+          esc(this._pairing ? this._t("pair_started") : this._t("pair_start")) + "</button></div>";
+      }
       return html;
     }
 
@@ -574,6 +586,16 @@
         if (min !== null) value = Math.max(min, value);
         if (max !== null) value = Math.min(max, value);
         this._call("number", "set_value", { entity_id: ent, value: Math.round(value * 100) / 100 });
+      } else if (act === "press") {
+        var self = this;
+        this._call("button", "press", { entity_id: ent }).then(function () {
+          self._pairing = true;
+          self._render();
+          setTimeout(function () {
+            self._pairing = false;
+            self._render();
+          }, 120000);
+        });
       } else if (act === "collapse") {
         var key = node.getAttribute("data-key");
         this._open[key] = !this._open[key];

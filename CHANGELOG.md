@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- Die Meldungen „Thermostat nicht erreichbar“ und die Überhitzungswarnung relativ zum Sollwert entfallen (zu viele Fehlalarme bei funktionierenden Thermostaten). Ersatz: Der Admin wird benachrichtigt, wenn ein Thermostat mindestens **25 °C** misst, und zwar **15 Minuten** lang (beides in den Einstellungen änderbar, nur in der Heizperiode; Wiederholung alle 6 Stunden, 08–22 Uhr). Die Meldung „Tür-/Fenstersensor nicht erreichbar“ bleibt.
+- Die Türwarnung kommt jetzt nach **5 Minuten** offener Tür (unabhängig von der Wartezeit zum Abschalten der Heizung), dann wie bisher alle 3 Minuten, maximal 3-mal.
+- Neuer Button „Türsensor anlernen“ (auch in der Karte unter „Allgemeine Einstellungen“): öffnet das ZHA-Netzwerk für 2 Minuten (`zha.permit`). Danach die Reset-Taste am Sensor ca. 3 Sekunden halten, bis die LED blinkt; ZHA erkennt den Sensor an seiner IEEE-Adresse wieder, die Entitäten bleiben erhalten.
+
 ## 0.5.0
 
 - Lovelace-Karte: „Allgemeine Einstellungen“ und jeder Raum sind einklappbar und standardmäßig eingeklappt. Status-Chips (Heizperiode, offen, Raumstatus) bleiben in der Kopfzeile sichtbar.

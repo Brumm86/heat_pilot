@@ -9,7 +9,7 @@ from custom_components.heat_pilot.alerts import (
     Plan,
     in_window,
     is_due,
-    is_overheating,
+    is_too_hot,
 )
 
 T0 = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
@@ -58,9 +58,9 @@ def test_window(hour: int, expected: bool) -> None:
     assert in_window(hour, None)
 
 
-def test_overheating() -> None:
-    assert is_overheating("heat", 21.0, 24.5, 3.0)
-    assert not is_overheating("heat", 21.0, 24.0, 3.0)  # exactly delta
-    assert not is_overheating("off", 21.0, 30.0, 3.0)
-    assert not is_overheating("heat", None, 30.0, 3.0)
-    assert not is_overheating("heat", 21.0, "unavailable", 3.0)
+def test_too_hot() -> None:
+    assert is_too_hot(25.0, 25.0)
+    assert is_too_hot("26.3", 25.0)
+    assert not is_too_hot(24.9, 25.0)
+    assert not is_too_hot(None, 25.0)
+    assert not is_too_hot("unavailable", 25.0)

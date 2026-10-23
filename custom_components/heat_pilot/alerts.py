@@ -59,16 +59,9 @@ def is_due(episode: Episode, plan: Plan, now: datetime, local_hour: int) -> bool
     return now >= target and in_window(local_hour, plan.window)
 
 
-def is_overheating(
-    hvac_mode: str | None,
-    setpoint: object,
-    measured: object,
-    delta: float,
-) -> bool:
-    """Room is hotter than the setpoint by more than ``delta`` while heating."""
-    if hvac_mode != "heat":
-        return False
+def is_too_hot(measured: object, threshold: float) -> bool:
+    """A thermostat measures ``threshold`` or more (suspect: stuck valve)."""
     try:
-        return float(measured) > float(setpoint) + delta  # type: ignore[arg-type]
+        return float(measured) >= threshold  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return False

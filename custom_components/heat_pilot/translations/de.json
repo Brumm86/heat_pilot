@@ -19,10 +19,10 @@
         "data": {
           "admin_notify": "Admin-Handy (Störungsmeldungen)",
           "ventilation_delay": "Lüftungserinnerung nach (Minuten)",
-          "unavailable_delay": "Störungsmeldung nach Nichterreichbarkeit von (Minuten)",
-          "overheat_delta": "Überhitzung: Kelvin über Sollwert",
-          "overheat_minutes": "Überhitzung: mindestens (Minuten)",
-          "dashboard_path": "Dashboard-Pfad beim Antippen einer Benachrichtigung"
+          "unavailable_delay": "Störungsmeldung nach Nichterreichbarkeit eines Tür-/Fenstersensors (Minuten)",
+          "dashboard_path": "Dashboard-Pfad beim Antippen einer Benachrichtigung",
+          "overheat_temp": "Thermostat-Warnung: gemessene Temperatur ab (°C)",
+          "overheat_hold_minutes": "Thermostat-Warnung: mindestens für (Minuten)"
         }
       },
       "persons": {
@@ -149,6 +149,11 @@
       "return_at": {
         "name": "Rückkehrzeit"
       }
+    },
+    "button": {
+      "pair_door_sensor": {
+        "name": "Türsensor anlernen"
+      }
     }
   },
   "services": {
@@ -181,6 +186,9 @@
     },
     "not_loaded": {
       "message": "Heat Pilot ist nicht geladen."
+    },
+    "zha_missing": {
+      "message": "Die ZHA-Integration ist nicht geladen; der Anlernmodus kann nicht gestartet werden."
     }
   }
 }

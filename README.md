@@ -49,11 +49,15 @@ Die Abschnitte „Allgemeine Einstellungen“ und die einzelnen Räume sind eink
 
 Einstellungen → Heat Pilot → Konfigurieren: Admin-Handy, Handy je Person (feste Zuordnung), Wartezeiten und Dashboard-Pfad.
 
-- **Türwarnung** (je Raum schaltbar): nach der Wartezeit des Raums, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen, die als „anders beheizt“ gelten). Verschwindet, sobald die Tür zu ist.
+- **Türwarnung** (je Raum schaltbar): nach 5 Minuten offener Tür, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen, die als „anders beheizt“ gelten). Verschwindet, sobald die Tür zu ist.
 - **Lüftungserinnerung**: einmalig, wenn ein Fenster die Heizung abgeschaltet hat und weiterhin offen ist (Standard 15 Minuten).
-- **Störungsmeldungen** (nur Admin-Handy): Tür-/Fenstersensor oder Thermostat nicht erreichbar (Standard 30 Minuten), Überhitzung (Standard mehr als 3 K über Sollwert für 45 Minuten). Wiederholung alle 6 Stunden, nur zwischen 08:00 und 22:00.
+- **Störungsmeldungen** (nur Admin-Handy): Tür-/Fenstersensor nicht erreichbar (Standard 30 Minuten) und Thermostat, das mindestens 25 °C misst (Standard: 15 Minuten lang, nur in der Heizperiode; Hinweis auf defektes Ventil). Wiederholung alle 6 Stunden, nur zwischen 08:00 und 22:00.
 
 Jede aufs Handy gesendete Meldung erscheint zusätzlich als dauerhafte Benachrichtigung in der Mitteilungszentrale von Home Assistant und verschwindet dort, sobald die Ursache behoben ist. Ein Tipp auf die Handy-Meldung öffnet die Mitteilungszentrale: Home Assistant hat dafür keine eigene URL, daher hängt Heat Pilot `?heat_pilot_notifications=1` an den Dashboard-Pfad; die automatisch geladene Kartendatei erkennt den Parameter und öffnet die Mitteilungen.
+
+## Türsensor neu anlernen (ZHA)
+
+Der Button „Türsensor anlernen“ (Heat-Pilot-Gerät und Karte) öffnet das ZHA-Netzwerk für 2 Minuten. Anschließend die Reset-Taste am ausgefallenen Sensor etwa 3 Sekunden halten, bis die LED blinkt. ZHA erkennt den Sensor an seiner IEEE-Adresse wieder; Entitäten und Heat-Pilot-Zuordnung bleiben bestehen. Voraussetzung: ZHA ist geladen.
 
 ## Dienst
 

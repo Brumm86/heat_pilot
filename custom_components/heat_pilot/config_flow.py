@@ -39,8 +39,8 @@ from .const import (
     CONF_DOOR_SENSORS,
     CONF_EXTERNAL_HEATING,
     CONF_OPEN_DELAY,
-    CONF_OVERHEAT_DELTA,
     CONF_OVERHEAT_MINUTES,
+    CONF_OVERHEAT_TEMP,
     CONF_PERSON_NOTIFY,
     CONF_PERSONS,
     CONF_SCHEDULE,
@@ -51,8 +51,8 @@ from .const import (
     DEFAULT_ABSENCE_DELAY,
     DEFAULT_DASHBOARD_PATH,
     DEFAULT_OPEN_DELAY,
-    DEFAULT_OVERHEAT_DELTA,
     DEFAULT_OVERHEAT_MINUTES,
+    DEFAULT_OVERHEAT_TEMP,
     DEFAULT_UNAVAILABLE_DELAY,
     DEFAULT_VENTILATION_DELAY,
     DOMAIN,
@@ -260,11 +260,11 @@ class HeatPilotOptionsFlow(OptionsFlow):
                     )
                 ),
                 vol.Required(
-                    CONF_OVERHEAT_DELTA, default=DEFAULT_OVERHEAT_DELTA
+                    CONF_OVERHEAT_TEMP, default=DEFAULT_OVERHEAT_TEMP
                 ): NumberSelector(
                     NumberSelectorConfig(
-                        min=0.5, max=15, step=0.5, mode=NumberSelectorMode.BOX,
-                        unit_of_measurement="K",
+                        min=20, max=40, step=0.5, mode=NumberSelectorMode.BOX,
+                        unit_of_measurement="°C",
                     )
                 ),
                 vol.Required(
