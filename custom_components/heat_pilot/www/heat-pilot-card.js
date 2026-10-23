@@ -17,6 +17,9 @@
   var TXT = {
     de: {
       title: "Heat Pilot",
+      general: "Allgemeine Einstellungen",
+      expand: "Aufklappen",
+      collapse: "Einklappen",
       absence: "Abwesenheitsmodus",
       return_at: "Rückkehr",
       period: "Heizperiode",
@@ -49,6 +52,9 @@
     },
     en: {
       title: "Heat Pilot",
+      general: "General settings",
+      expand: "Expand",
+      collapse: "Collapse",
       absence: "Absence mode",
       return_at: "Return",
       period: "Heating period",
@@ -112,7 +118,14 @@
     "ha-card{padding:12px 16px 16px}" +
     "h2{margin:0 0 8px;font-size:1.3em;font-weight:500}" +
     "h3{margin:0;font-size:1.1em;font-weight:500}" +
-    ".sec{border-top:1px solid var(--divider-color);padding:12px 0 4px;margin-top:8px}" +
+    ".sec{border-top:1px solid var(--divider-color);padding:4px 0;margin-top:8px}" +
+    ".head{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;" +
+    "gap:8px;min-height:44px;padding:0;background:none;border:none;color:inherit;font:inherit;" +
+    "text-align:left;cursor:pointer}" +
+    ".head .title{display:flex;align-items:center;gap:8px;min-width:0}" +
+    ".head .chev{display:inline-block;transition:transform .15s;color:var(--secondary-text-color)}" +
+    ".head[aria-expanded=true] .chev{transform:rotate(90deg)}" +
+    ".body{padding:0 0 8px}" +
     ".row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;flex-wrap:wrap}" +
     ".sub{color:var(--secondary-text-color);font-size:.9em}" +
     ".chip{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.85em;background:var(--secondary-background-color)}" +
@@ -145,6 +158,8 @@
       this._periodOpen = false;
       this._periodDraft = null;
       this._bound = false;
+      // Collapsed by default: only keys set to true are open.
+      this._open = {};
     }
 
     setConfig(config) {
@@ -208,6 +223,7 @@
         var id = entry.device_id || entityId;
         if (!out.rooms[id]) {
           out.rooms[id] = {
+            id: id,
             name: device ? device.name_by_user || device.name : id,
             ents: {},
           };
@@ -302,6 +318,17 @@
       );
     }
 
+    /** Clickable section header; chips (already escaped HTML) sit on the right. */
+    _head(key, titleHtml, chipsHtml) {
+      var open = !!this._open[key];
+      return (
+        '<button class="head" data-act="collapse" data-key="' + esc(key) + '" aria-expanded="' +
+        (open ? "true" : "false") + '" title="' + esc(this._t(open ? "collapse" : "expand")) + '">' +
+        '<span class="title"><span class="chev">&#9656;</span>' + titleHtml + "</span>" +
+        "<span>" + (chipsHtml || "") + "</span></button>"
+      );
+    }
+
     _renderGlobal(g) {
       var html = "";
       var period = this._state(g.heating_period);
@@ -355,6 +382,23 @@
       return html;
     }
 
+    _renderGlobalSection(g) {
+      var period = this._state(g.heating_period);
+      var chips = "";
+      if (period) {
+        var active = period.state === "active";
+        chips =
+          '<span class="chip ' + (active ? "on" : "") + '">' + esc(this._t("period") + ": " +
+          this._t(active ? "period_active" : "period_inactive")) + "</span>";
+      }
+      var html = '<div class="sec">' +
+        this._head("global", "<h3>" + esc(this._t("general")) + "</h3>", chips);
+      if (this._open.global) {
+        html += '<div class="body">' + this._renderGlobal(g) + "</div>";
+      }
+      return html + "</div>";
+    }
+
     _renderRoom(room) {
       var e = room.ents;
       var hass = this._hass;
@@ -362,14 +406,18 @@
       var attrs = status ? status.attributes : {};
       var thermostat = this._state((attrs.thermostats || [])[0]);
       var opening = this._state(e.opening);
-      var html = '<div class="sec"><div class="row"><h3>' + esc(room.name) + "</h3><span>";
+      var chips = "";
       if (opening && opening.state === "on") {
-        html += '<span class="chip warn">' + esc(this._t("open")) + "</span> ";
+        chips += '<span class="chip warn">' + esc(this._t("open")) + "</span> ";
       }
       if (status) {
-        html += '<span class="chip on">' + esc(this._display(status)) + "</span>";
+        chips += '<span class="chip on">' + esc(this._display(status)) + "</span>";
       }
-      html += "</span></div>";
+      var html = '<div class="sec">' + this._head(room.id, "<h3>" + esc(room.name) + "</h3>", chips);
+      if (!this._open[room.id]) {
+        return html + "</div>";
+      }
+      html += '<div class="body">';
       if (thermostat) {
         html +=
           '<div class="temps sub"><span>' + esc(this._t("current")) + ": " +
@@ -395,7 +443,7 @@
           '<div class="actions"><button class="link" data-act="plan" data-ent="' +
           esc(attrs.schedule) + '">' + esc(this._t("edit_plan")) + "</button></div>";
       }
-      return html + "</div>";
+      return html + "</div></div>";
     }
 
     _fmtTime(value) {
@@ -427,7 +475,7 @@
       if (!data.found) {
         html += '<div class="empty">' + esc(this._t("no_entities")) + "</div>";
       } else {
-        html += this._renderGlobal(data.global);
+        html += this._renderGlobalSection(data.global);
         var ids = Object.keys(data.rooms).sort(function (a, b) {
           return String(data.rooms[a].name).localeCompare(String(data.rooms[b].name));
         });
@@ -526,6 +574,10 @@
         if (min !== null) value = Math.max(min, value);
         if (max !== null) value = Math.min(max, value);
         this._call("number", "set_value", { entity_id: ent, value: Math.round(value * 100) / 100 });
+      } else if (act === "collapse") {
+        var key = node.getAttribute("data-key");
+        this._open[key] = !this._open[key];
+        this._render();
       } else if (act === "plan") {
         this.dispatchEvent(
           new CustomEvent("hass-more-info", {
@@ -590,6 +642,61 @@
       .catch(function () {
         /* not inside a normal HA frontend - nothing to recover */
       });
+  }
+
+  // Notification centre deep link. Home Assistant has no URL for its
+  // notification drawer, so Heat Pilot phone messages open the dashboard with
+  // "?heat_pilot_notifications=1"; this (always loaded) script then fires the
+  // frontend's own "hass-show-notifications" event and removes the parameter.
+  var NOTIFY_PARAM = "heat_pilot_notifications";
+
+  function hasNotifyParam() {
+    try {
+      return new URLSearchParams(window.location.search).has(NOTIFY_PARAM);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function stripNotifyParam() {
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.delete(NOTIFY_PARAM);
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    } catch (e) {
+      /* leave the URL as it is */
+    }
+  }
+
+  function findMain() {
+    var ha = document.querySelector("home-assistant");
+    return ha && ha.shadowRoot ? ha.shadowRoot.querySelector("home-assistant-main") : null;
+  }
+
+  function showNotifications(attempt) {
+    if (!hasNotifyParam()) {
+      return;
+    }
+    var main = findMain();
+    if (main) {
+      main.dispatchEvent(new CustomEvent("hass-show-notifications", { bubbles: true, composed: true }));
+      stripNotifyParam();
+    } else if (attempt < 60) {
+      window.setTimeout(function () {
+        showNotifications(attempt + 1);
+      }, 500);
+    }
+  }
+
+  if (typeof window !== "undefined" && window.addEventListener) {
+    showNotifications(0);
+    // In-app navigation (no page reload) to a URL carrying the parameter.
+    window.addEventListener("location-changed", function () {
+      showNotifications(0);
+    });
+    window.addEventListener("popstate", function () {
+      showNotifications(0);
+    });
   }
 
   window.customCards = window.customCards || [];

@@ -2,7 +2,10 @@
 
 Notifications are Android-companion-app style: persistent and sticky, with a
 chronometer, one ``tag`` per condition so repeats replace each other, and
-cleared again as soon as the condition ends.
+cleared again as soon as the condition ends. Every phone message is mirrored
+as a persistent notification in Home Assistant's notification centre (same
+``tag``-derived id, dismissed together with the phone message); tapping the
+phone message opens that notification centre.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.const import STATE_HOME, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
@@ -49,6 +53,10 @@ _CHANNEL_DOOR = "Heat Pilot Türwarnung"
 _CHANNEL_ALERT = "Heat Pilot Störung"
 
 Key = tuple[str, str]  # (kind, id)
+
+# Opening this query on any dashboard makes the frontend card script show the
+# notification centre (see www/heat-pilot-card.js).
+NOTIFICATIONS_QUERY = "heat_pilot_notifications=1"
 
 _TEXT = {
     "de": {
@@ -236,8 +244,12 @@ class HeatPilotNotifier:
         for key in list(self._episodes):
             if key not in active:
                 episode = self._episodes.pop(key)
-                if key[0] in ("door", "vent") and episode.sent:
-                    await self._async_clear(key)
+                if episode.sent:
+                    persistent_notification.async_dismiss(
+                        self.hass, self._notification_id(key)
+                    )
+                    if key[0] in ("door", "vent"):
+                        await self._async_clear(key)
         for key, (since, _ctx) in active.items():
             self._episodes.setdefault(key, Episode(since=since))
 
@@ -260,6 +272,15 @@ class HeatPilotNotifier:
                 if (s := self._state(person)) is not None and s.state == STATE_HOME
             ]
         return [self._admin] if self._admin else []
+
+    def _click_action(self) -> str:
+        """Dashboard URL that opens Home Assistant's notification centre."""
+        separator = "&" if "?" in self._dashboard else "?"
+        return f"{self._dashboard}{separator}{NOTIFICATIONS_QUERY}"
+
+    @staticmethod
+    def _notification_id(key: Key) -> str:
+        return f"heat_pilot_{key[0]}_{key[1]}"
 
     def _name(self, entity_id: str) -> str:
         state = self._state(entity_id)
@@ -287,7 +308,7 @@ class HeatPilotNotifier:
                 "when": int(episode.since.timestamp()),
                 "color": "#e53935",
                 "notification_icon": "mdi:door-open",
-                "clickAction": self._dashboard,
+                "clickAction": self._click_action(),
             }
             return title, message, data
         name = self._name(ctx["entity_id"])
@@ -305,7 +326,7 @@ class HeatPilotNotifier:
             "notification_icon": "mdi:thermometer-alert"
             if kind == "overheat"
             else "mdi:alert-circle",
-            "clickAction": self._dashboard,
+            "clickAction": self._click_action(),
         }
         return text["alert_title"], message, data
 
@@ -317,6 +338,12 @@ class HeatPilotNotifier:
             _LOGGER.debug("No notification recipients for %s", key)
             return
         title, message, data = self._build(key, episode, ctx, now)
+        persistent_notification.async_create(
+            self.hass,
+            message,
+            title=title,
+            notification_id=self._notification_id(key),
+        )
         for service in recipients:
             await self._async_call(service, {"title": title, "message": message, "data": data})
 
@@ -324,7 +351,7 @@ class HeatPilotNotifier:
         for service in set(self._person_notify.values()):
             await self._async_call(
                 service,
-                {"message": "clear_notification", "data": {"tag": f"heat_pilot_{key[0]}_{key[1]}"}},
+                {"message": "clear_notification", "data": {"tag": self._notification_id(key)}},
             )
 
     async def _async_call(self, service: str, payload: dict[str, Any]) -> None:

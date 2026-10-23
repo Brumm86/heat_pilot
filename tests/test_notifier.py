@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
@@ -118,9 +119,20 @@ def _messages(sent: list[tuple[str, ServiceCall]], service: str) -> list[Service
     return [c for n, c in sent if n == service and c.data["message"] != "clear_notification"]
 
 
+@pytest.fixture
+def persistent():
+    """Spy on the persistent notifications the notifier creates/dismisses."""
+    with (
+        patch("custom_components.heat_pilot.notifier.persistent_notification.async_create") as create,
+        patch("custom_components.heat_pilot.notifier.persistent_notification.async_dismiss") as dismiss,
+    ):
+        yield create, dismiss
+
+
 async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
-    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, sent, persistent, freezer: FrozenDateTimeFactory
 ) -> None:
+    create_mock, dismissed = persistent
     freezer.move_to("2026-11-10 12:00:00+00:00")
     await _setup(hass)
 
@@ -137,11 +149,21 @@ async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
     data = alice[0].data["data"]
     assert data["tag"].startswith("heat_pilot_door_")
     assert data["persistent"] and data["sticky"] and data["chronometer"]
-    assert data["clickAction"] == "/dashboard-heat"
+    assert data["clickAction"] == "/dashboard-heat?heat_pilot_notifications=1"
+
+    # Mirrored as a persistent notification in Home Assistant (once per send,
+    # same id, so repeats replace each other).
+    notification_id = data["tag"]
+    created = create_mock.call_args_list
+    assert len(created) == 3
+    assert {c.kwargs["notification_id"] for c in created} == {notification_id}
+    assert created[0].kwargs["title"] == "Tür offen – Room"
+    dismissed.assert_not_called()
 
     sent.clear()
     hass.states.async_set(DOOR, "off")
     await _advance(hass, freezer, seconds=30)
+    dismissed.assert_called_once_with(hass, notification_id)
     cleared = [c for _, c in sent if c.data["message"] == "clear_notification"]
     assert {c.data["data"]["tag"] for c in cleared} == {data["tag"]}
 

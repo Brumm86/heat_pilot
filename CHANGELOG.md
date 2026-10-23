@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Lovelace-Karte: „Allgemeine Einstellungen“ und jeder Raum sind einklappbar und standardmäßig eingeklappt. Status-Chips (Heizperiode, offen, Raumstatus) bleiben in der Kopfzeile sichtbar.
+- Jede an ein Handy gesendete Meldung (Türwarnung, Lüftungserinnerung, Störungen) erscheint zusätzlich als dauerhafte Benachrichtigung in der Mitteilungszentrale von Home Assistant. Wiederholungen ersetzen sich, die Benachrichtigung verschwindet, sobald die Ursache behoben ist.
+- Ein Tipp auf die Handy-Meldung öffnet die Mitteilungszentrale (Dashboard-Pfad mit `?heat_pilot_notifications=1`; die Karten-Skriptdatei, die Home Assistant ohnehin lädt, öffnet daraufhin die Mitteilungen).
+
 ## 0.4.0
 
 - Neue Raumoption „Raum wird anders beheizt (z. B. Fußbodenheizung)“: Die Türwarnung wird dann auch ausgelöst, wenn der Raum heute nicht über ein Thermostat geheizt hat (bisher unterdrückt, solange der Raum aus war und heute nicht beheizt wurde). Die Beschränkung auf die Heizperiode bleibt.
