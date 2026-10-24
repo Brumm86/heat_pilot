@@ -106,6 +106,9 @@
       },
       "door_warning_setback_only": {
         "name": "Türwarnung nur in der Absenkung"
+      },
+      "door_warning_heating_only": {
+        "name": "Türwarnung nur beim Heizen"
       }
     },
     "number": {

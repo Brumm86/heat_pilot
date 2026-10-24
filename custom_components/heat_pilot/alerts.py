@@ -65,3 +65,4 @@ def is_too_hot(measured: object, threshold: float) -> bool:
         return float(measured) >= threshold  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return False
+

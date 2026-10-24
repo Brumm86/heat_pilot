@@ -106,6 +106,9 @@
       },
       "door_warning_setback_only": {
         "name": "Door warning only during setback"
+      },
+      "door_warning_heating_only": {
+        "name": "Door warning only while heating"
       }
     },
     "number": {

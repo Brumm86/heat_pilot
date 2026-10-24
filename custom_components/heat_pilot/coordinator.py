@@ -157,6 +157,9 @@ class RoomStatus:
     heated_today: bool
     # Schedule phase is setback (independent of door/window/absence shutdowns).
     in_setback: bool = False
+    # Schedule phase is comfort (or setback skipped) and nothing else overrides it
+    # except door/window shutdown: the room is meant to be heated to comfort now.
+    in_comfort: bool = False
 
 
 def _person_is_away(state: str | None) -> bool:
@@ -391,7 +394,19 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         )
 
     def _compute_status(self, room: RoomConfig, now: datetime) -> RoomStatus:
-        decision = decide(self._inputs(room, now))
+        inputs = self._inputs(room, now)
+        decision = decide(inputs)
+        in_comfort = (
+            bool(room.thermostats)
+            and inputs.period_active
+            and not inputs.absence_mode
+            and not (
+                inputs.absence_shutdown_enabled
+                and inputs.has_persons
+                and inputs.persons_away_beyond_delay
+            )
+            and (inputs.schedule_on or inputs.skip_setback)
+        )
         opening_open = any(sensor_is_open(self._state(e)) for e in room.openings)
         beyond = self._elapsed(
             self._open_since.get(room.room_id), now, room.open_delay
@@ -422,6 +437,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             in_setback=bool(room.thermostats)
             and self._state(room.schedule or "") != "on"
             and not self.store.room(room.room_id)["skip_setback"],
+            in_comfort=in_comfort,
         )
 
     def _compute_all(self, now: datetime) -> dict[str, RoomStatus]:

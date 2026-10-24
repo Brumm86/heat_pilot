@@ -64,3 +64,4 @@ def test_too_hot() -> None:
     assert not is_too_hot(24.9, 25.0)
     assert not is_too_hot(None, 25.0)
     assert not is_too_hot("unavailable", 25.0)
+

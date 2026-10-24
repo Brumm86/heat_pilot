@@ -348,6 +348,54 @@ async def test_door_warning_in_setback_even_after_door_shut_heating_off(
     assert len(_messages(sent, "mobile_app_alice")) == 1
 
 
+async def test_door_warning_only_in_comfort_when_option_is_on(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    coordinator = _coordinator(hass)
+    room_id = next(iter(coordinator.rooms))
+    await coordinator.async_set_room_feature(room_id, "door_warning_heating_only", True)
+    hass.states.async_set("schedule.room", "off")  # setback
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=20)
+    assert not _messages(sent, "mobile_app_alice")
+
+    hass.states.async_set("schedule.room", "on")  # comfort begins, door still open
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=1)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
+
+
+async def test_door_warning_in_comfort_even_after_door_shut_heating_off(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)  # schedule on = comfort
+    coordinator = _coordinator(hass)
+    room_id = next(iter(coordinator.rooms))
+    await coordinator.async_set_room_feature(room_id, "door_warning_heating_only", True)
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    # After 3 min the heating is off (reason "opening"); the warning at 5 min
+    # still comes because the room is in its comfort phase.
+    await _advance(hass, freezer, minutes=6)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
+
+
+async def test_door_warning_in_setback_is_sent_when_option_is_off(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    hass.states.async_set("schedule.room", "off")
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=6)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
+
+
 async def test_alerts_sensor_lists_thermostat_alert_and_clears(
     hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
 ) -> None:

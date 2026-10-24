@@ -39,6 +39,7 @@ from .const import (
     DOOR_WARNING_MAX,
     DOOR_WARNING_REPEAT_MINUTES,
     FEATURE_DOOR_WARNING,
+    FEATURE_DOOR_WARNING_HEATING_ONLY,
     FEATURE_DOOR_WARNING_SETBACK_ONLY,
     FEATURE_OPENING_SHUTDOWN,
     SIGNAL_ALERTS_UPDATED,
@@ -246,6 +247,19 @@ class HeatPilotNotifier:
         ):
             return True
         room = self.coordinator.rooms.get(room_id)
+        if (
+            kind == "door"
+            and room is not None
+            and room.thermostats
+            and self.coordinator.room_state(room_id)["features"][
+                FEATURE_DOOR_WARNING_HEATING_ONLY
+            ]
+            and status is not None
+            and not status.in_comfort
+        ):
+            # Only while the room is being heated to comfort temperature
+            # (rooms without thermostat have no comfort phase and are not filtered).
+            return True
         if kind == "door" and room is not None and room.externally_heated:
             # Heated outside Home Assistant (e.g. underfloor heating): the
             # thermostats say nothing about whether the room is heated.

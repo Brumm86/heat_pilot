@@ -42,16 +42,23 @@ FEATURE_MAX_LIMIT = "max_limit"
 # Door warning only while the room is in its setback phase (e.g. a kitchen next
 # to a room that is heated all day: an open door only matters when it is cold).
 FEATURE_DOOR_WARNING_SETBACK_ONLY = "door_warning_setback_only"
+# Door warning only while the room is being heated to comfort temperature
+# (schedule in comfort phase, or setback skipped).
+FEATURE_DOOR_WARNING_HEATING_ONLY = "door_warning_heating_only"
 ROOM_FEATURES = (
     FEATURE_DOOR_WARNING,
     FEATURE_DOOR_WARNING_SETBACK_ONLY,
+    FEATURE_DOOR_WARNING_HEATING_ONLY,
     FEATURE_OPENING_SHUTDOWN,
     FEATURE_ABSENCE_SHUTDOWN,
     FEATURE_MAX_LIMIT,
 )
 
 # Features that are off until the user switches them on.
-FEATURES_DEFAULT_OFF = (FEATURE_DOOR_WARNING_SETBACK_ONLY,)
+FEATURES_DEFAULT_OFF = (
+    FEATURE_DOOR_WARNING_SETBACK_ONLY,
+    FEATURE_DOOR_WARNING_HEATING_ONLY,
+)
 
 SERVICE_SET_HEATING_PERIOD = "set_heating_period"
 ATTR_START_MONTH = "start_month"
