@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
-
 import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentryData
@@ -120,20 +118,9 @@ def _messages(sent: list[tuple[str, ServiceCall]], service: str) -> list[Service
     return [c for n, c in sent if n == service and c.data["message"] != "clear_notification"]
 
 
-@pytest.fixture
-def persistent():
-    """Spy on the persistent notifications the notifier creates/dismisses."""
-    with (
-        patch("custom_components.heat_pilot.notifier.persistent_notification.async_create") as create,
-        patch("custom_components.heat_pilot.notifier.persistent_notification.async_dismiss") as dismiss,
-    ):
-        yield create, dismiss
-
-
 async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
-    hass: HomeAssistant, sent, persistent, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
 ) -> None:
-    create_mock, dismissed = persistent
     freezer.move_to("2026-11-10 12:00:00+00:00")
     await _setup(hass)
 
@@ -152,21 +139,18 @@ async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
     data = alice[0].data["data"]
     assert data["tag"].startswith("heat_pilot_door_")
     assert data["persistent"] and data["sticky"] and data["chronometer"]
-    assert data["clickAction"] == "/dashboard-heat?heat_pilot_notifications=1"
+    assert data["clickAction"] == "/dashboard-heat"
 
-    # Mirrored as a persistent notification in Home Assistant (once per send,
-    # same id, so repeats replace each other).
+    # Listed as an active alert until the door is closed (no HA notification centre).
+    alerts = hass.states.get("sensor.heat_pilot_active_alerts")
+    assert alerts.state == "1"
+    assert alerts.attributes["alerts"][0]["title"] == "Tür offen – Room"
     notification_id = data["tag"]
-    created = create_mock.call_args_list
-    assert len(created) == 3
-    assert {c.kwargs["notification_id"] for c in created} == {notification_id}
-    assert created[0].kwargs["title"] == "Tür offen – Room"
-    dismissed.assert_not_called()
 
     sent.clear()
     hass.states.async_set(DOOR, "off")
     await _advance(hass, freezer, seconds=30)
-    dismissed.assert_called_once_with(hass, notification_id)
+    assert hass.states.get("sensor.heat_pilot_active_alerts").state == "0"
     cleared = [c for _, c in sent if c.data["message"] == "clear_notification"]
     assert {c.data["data"]["tag"] for c in cleared} == {data["tag"]}
 
@@ -321,3 +305,59 @@ async def test_pair_button_without_zha_raises(hass: HomeAssistant) -> None:
         await hass.services.async_call(
             "button", "press", {"entity_id": "button.heat_pilot_pair_door_sensor"}, blocking=True
         )
+
+
+def _coordinator(hass: HomeAssistant):
+    return hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+
+
+async def test_door_warning_only_in_setback_when_option_is_on(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)  # schedule is "on" = comfort
+    coordinator = _coordinator(hass)
+    room_id = next(iter(coordinator.rooms))
+    await coordinator.async_set_room_feature(room_id, "door_warning_setback_only", True)
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=20)
+    assert not _messages(sent, "mobile_app_alice")
+
+    hass.states.async_set("schedule.room", "off")  # setback starts
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=1)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
+
+
+async def test_door_warning_in_setback_even_after_door_shut_heating_off(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    coordinator = _coordinator(hass)
+    room_id = next(iter(coordinator.rooms))
+    await coordinator.async_set_room_feature(room_id, "door_warning_setback_only", True)
+    hass.states.async_set("schedule.room", "off")
+    await hass.async_block_till_done()
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    # After 3 min the heating is off (reason "opening"); the warning at 5 min
+    # still comes because the schedule phase is setback.
+    await _advance(hass, freezer, minutes=6)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
+
+
+async def test_alerts_sensor_lists_thermostat_alert_and_clears(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    _thermostat(hass, current=25.0, target=21.0)
+    await _advance(hass, freezer, minutes=16)
+    state = hass.states.get("sensor.heat_pilot_active_alerts")
+    assert state.state == "1"
+    assert state.attributes["alerts"][0]["kind"] == "overheat"
+    _thermostat(hass, current=22.0, target=21.0)
+    await _advance(hass, freezer, seconds=30)
+    assert hass.states.get("sensor.heat_pilot_active_alerts").state == "0"

@@ -49,11 +49,11 @@ Die Abschnitte „Allgemeine Einstellungen“ und die einzelnen Räume sind eink
 
 Einstellungen → Heat Pilot → Konfigurieren: Admin-Handy, Handy je Person (feste Zuordnung), Wartezeiten und Dashboard-Pfad.
 
-- **Türwarnung** (je Raum schaltbar): nach 5 Minuten offener Tür, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen, die als „anders beheizt“ gelten). Verschwindet, sobald die Tür zu ist.
+- **Türwarnung** (je Raum schaltbar): nach 5 Minuten offener Tür, dann alle 3 Minuten, maximal 3-mal, an alle zugeordneten Personen, die zu Hause sind. Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen, die als „anders beheizt“ gelten). Verschwindet, sobald die Tür zu ist. Mit dem Raumschalter **Türwarnung nur in der Absenkung** (standardmäßig aus) kommt die Warnung nur, solange der Zeitplan des Raums in der Absenkung ist, z. B. für eine Küche neben einem durchgehend beheizten Raum.
 - **Lüftungserinnerung**: einmalig, wenn ein Fenster die Heizung abgeschaltet hat und weiterhin offen ist (Standard 15 Minuten).
 - **Störungsmeldungen** (nur Admin-Handy): Tür-/Fenstersensor nicht erreichbar (Standard 30 Minuten) und Thermostat, das mindestens 25 °C misst (Standard: 15 Minuten lang, nur in der Heizperiode; Hinweis auf defektes Ventil). Wiederholung alle 6 Stunden, nur zwischen 08:00 und 22:00.
 
-Jede aufs Handy gesendete Meldung erscheint zusätzlich als dauerhafte Benachrichtigung in der Mitteilungszentrale von Home Assistant und verschwindet dort, sobald die Ursache behoben ist. Ein Tipp auf die Handy-Meldung öffnet die Mitteilungszentrale: Home Assistant hat dafür keine eigene URL, daher hängt Heat Pilot `?heat_pilot_notifications=1` an den Dashboard-Pfad; die automatisch geladene Kartendatei erkennt den Parameter und öffnet die Mitteilungen.
+Alle gesendeten Meldungen, deren Ursache noch besteht, listet die Karte oben im Abschnitt „Aktive Meldungen“ (Sensor „Aktive Meldungen“, Attribut `alerts`); der Abschnitt ist nur sichtbar, solange etwas aktiv ist, und leert sich von selbst. Ein Tipp auf die Handy-Meldung öffnet den eingestellten Dashboard-Pfad (am besten das Dashboard mit der Heat-Pilot-Karte).
 
 ## Türsensor neu anlernen (ZHA)
 

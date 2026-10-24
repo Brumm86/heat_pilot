@@ -155,6 +155,8 @@ class RoomStatus:
     unavailable_sensors: tuple[str, ...]
     next_change: str | None
     heated_today: bool
+    # Schedule phase is setback (independent of door/window/absence shutdowns).
+    in_setback: bool = False
 
 
 def _person_is_away(state: str | None) -> bool:
@@ -183,6 +185,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         )
         self.store = store
         self.rooms: dict[str, RoomConfig] = {}
+        # Active alerts, maintained by the notifier and shown by a sensor/the card.
+        self.active_alerts: list[dict[str, str]] = []
         self._entity_rooms: dict[str, set[str]] = {}
         self._open_since: dict[str, datetime] = {}
         self._away_since: dict[str, datetime] = {}
@@ -415,6 +419,9 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             next_change=next_event,
             heated_today=self.store.room(room.room_id)["heated_day"]
             == dt_util.as_local(now).date().isoformat(),
+            in_setback=bool(room.thermostats)
+            and self._state(room.schedule or "") != "on"
+            and not self.store.room(room.room_id)["skip_setback"],
         )
 
     def _compute_all(self, now: datetime) -> dict[str, RoomStatus]:

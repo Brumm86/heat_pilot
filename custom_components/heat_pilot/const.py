@@ -39,12 +39,19 @@ FEATURE_DOOR_WARNING = "door_warning"
 FEATURE_OPENING_SHUTDOWN = "opening_shutdown"
 FEATURE_ABSENCE_SHUTDOWN = "absence_shutdown"
 FEATURE_MAX_LIMIT = "max_limit"
+# Door warning only while the room is in its setback phase (e.g. a kitchen next
+# to a room that is heated all day: an open door only matters when it is cold).
+FEATURE_DOOR_WARNING_SETBACK_ONLY = "door_warning_setback_only"
 ROOM_FEATURES = (
     FEATURE_DOOR_WARNING,
+    FEATURE_DOOR_WARNING_SETBACK_ONLY,
     FEATURE_OPENING_SHUTDOWN,
     FEATURE_ABSENCE_SHUTDOWN,
     FEATURE_MAX_LIMIT,
 )
+
+# Features that are off until the user switches them on.
+FEATURES_DEFAULT_OFF = (FEATURE_DOOR_WARNING_SETBACK_ONLY,)
 
 SERVICE_SET_HEATING_PERIOD = "set_heating_period"
 ATTR_START_MONTH = "start_month"
@@ -78,6 +85,9 @@ ADMIN_WINDOW = (8, 22)
 
 # How long the ZHA network stays open for (re-)pairing a door sensor.
 PAIRING_DURATION_SECONDS = 120
+
+# Dispatcher signal (formatted with the entry id): the list of active alerts changed.
+SIGNAL_ALERTS_UPDATED = f"{DOMAIN}_alerts_updated_" + "{}"
 
 # Lovelace card, served from the integration's www folder.
 CARD_FILENAME = "heat-pilot-card.js"

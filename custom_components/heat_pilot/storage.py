@@ -22,6 +22,7 @@ from .const import (
     DEFAULT_PERIOD_END,
     DEFAULT_PERIOD_START,
     DEFAULT_SETBACK_TEMP,
+    FEATURES_DEFAULT_OFF,
     ROOM_FEATURES,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -47,7 +48,7 @@ def _default_room() -> dict[str, Any]:
         "comfort": DEFAULT_COMFORT_TEMP,
         "setback": DEFAULT_SETBACK_TEMP,
         "skip_setback": False,
-        "features": {feature: True for feature in ROOM_FEATURES},
+        "features": {feature: feature not in FEATURES_DEFAULT_OFF for feature in ROOM_FEATURES},
         # ISO date of the last day on which the room asked for heat; used to
         # decide whether a room was "heated today".
         "heated_day": None,

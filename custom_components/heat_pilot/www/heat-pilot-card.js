@@ -41,6 +41,9 @@
       comfort: "Komfort",
       setback: "Absenkung",
       door_warning: "Türwarnung",
+      door_warning_setback_only: "Türwarnung nur in der Absenkung",
+      alerts: "Aktive Meldungen",
+      since: "seit",
       opening_shutdown: "Aus bei offener Tür/Fenster",
       absence_shutdown: "Aus bei Raumabwesenheit",
       max_limit: "Maximaltemperatur begrenzen",
@@ -79,6 +82,9 @@
       comfort: "Comfort",
       setback: "Setback",
       door_warning: "Door warning",
+      door_warning_setback_only: "Door warning only during setback",
+      alerts: "Active alerts",
+      since: "since",
       opening_shutdown: "Off when door/window open",
       absence_shutdown: "Off when room absent",
       max_limit: "Limit maximum temperature",
@@ -96,6 +102,7 @@
   var ROOM_SWITCHES = [
     "skip_setback",
     "door_warning",
+    "door_warning_setback_only",
     "opening_shutdown",
     "absence_shutdown",
     "max_limit",
@@ -152,6 +159,11 @@
     ".editor input,.editor select{font:inherit;padding:6px;border:1px solid var(--divider-color);" +
     "border-radius:6px;background:var(--card-background-color);color:var(--primary-text-color)}" +
     ".actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}" +
+    ".alerts{border:1px solid var(--error-color,#e53935);border-radius:8px;padding:6px 12px;margin:8px 0}" +
+    ".alerts h3{color:var(--error-color,#e53935)}" +
+    ".alert{padding:6px 0;border-top:1px solid var(--divider-color)}" +
+    ".alert:first-of-type{border-top:none}" +
+    ".alert b{display:block}" +
     ".empty{padding:16px 0;color:var(--secondary-text-color)}";
 
   class HeatPilotCard extends HTMLElement {
@@ -394,6 +406,35 @@
       return html;
     }
 
+    /** Alerts that were sent to the phones and whose cause still exists. */
+    _renderAlerts(entityId) {
+      var st = this._state(entityId);
+      var alerts = (st && st.attributes.alerts) || [];
+      if (!alerts.length) {
+        return "";
+      }
+      var self = this;
+      var html = '<div class="alerts"><h3>' + esc(this._t("alerts")) + " (" + alerts.length + ")</h3>";
+      alerts.forEach(function (a) {
+        html +=
+          '<div class="alert"><b>' + esc(a.title) + "</b>" + esc(a.message) +
+          ' <span class="sub">(' + esc(self._t("since")) + " " + esc(self._fmtClock(a.since)) + ")</span></div>";
+      });
+      return html + "</div>";
+    }
+
+    _fmtClock(value) {
+      var d = new Date(value);
+      if (isNaN(d.getTime())) {
+        return String(value);
+      }
+      try {
+        return d.toLocaleTimeString(this._hass.language, { hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        return String(value);
+      }
+    }
+
     _renderGlobalSection(g) {
       var period = this._state(g.heating_period);
       var chips = "";
@@ -487,6 +528,7 @@
       if (!data.found) {
         html += '<div class="empty">' + esc(this._t("no_entities")) + "</div>";
       } else {
+        html += this._renderAlerts(data.global.active_alerts);
         html += this._renderGlobalSection(data.global);
         var ids = Object.keys(data.rooms).sort(function (a, b) {
           return String(data.rooms[a].name).localeCompare(String(data.rooms[b].name));
@@ -664,61 +706,6 @@
       .catch(function () {
         /* not inside a normal HA frontend - nothing to recover */
       });
-  }
-
-  // Notification centre deep link. Home Assistant has no URL for its
-  // notification drawer, so Heat Pilot phone messages open the dashboard with
-  // "?heat_pilot_notifications=1"; this (always loaded) script then fires the
-  // frontend's own "hass-show-notifications" event and removes the parameter.
-  var NOTIFY_PARAM = "heat_pilot_notifications";
-
-  function hasNotifyParam() {
-    try {
-      return new URLSearchParams(window.location.search).has(NOTIFY_PARAM);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function stripNotifyParam() {
-    try {
-      var url = new URL(window.location.href);
-      url.searchParams.delete(NOTIFY_PARAM);
-      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
-    } catch (e) {
-      /* leave the URL as it is */
-    }
-  }
-
-  function findMain() {
-    var ha = document.querySelector("home-assistant");
-    return ha && ha.shadowRoot ? ha.shadowRoot.querySelector("home-assistant-main") : null;
-  }
-
-  function showNotifications(attempt) {
-    if (!hasNotifyParam()) {
-      return;
-    }
-    var main = findMain();
-    if (main) {
-      main.dispatchEvent(new CustomEvent("hass-show-notifications", { bubbles: true, composed: true }));
-      stripNotifyParam();
-    } else if (attempt < 60) {
-      window.setTimeout(function () {
-        showNotifications(attempt + 1);
-      }, 500);
-    }
-  }
-
-  if (typeof window !== "undefined" && window.addEventListener) {
-    showNotifications(0);
-    // In-app navigation (no page reload) to a URL carrying the parameter.
-    window.addEventListener("location-changed", function () {
-      showNotifications(0);
-    });
-    window.addEventListener("popstate", function () {
-      showNotifications(0);
-    });
   }
 
   window.customCards = window.customCards || [];

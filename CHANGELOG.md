@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- Meldungen erscheinen nicht mehr in der Mitteilungszentrale von Home Assistant; der Parameter `?heat_pilot_notifications=1` und der zugehörige Code in der Karte entfallen. Ein Tipp auf die Handy-Meldung öffnet jetzt den in den Einstellungen hinterlegten Dashboard-Pfad.
+- Neuer Sensor „Aktive Meldungen“ (Anzahl; Attribut `alerts` mit Art, Raum, Titel, Text und Beginn) und neuer Abschnitt „Aktive Meldungen“ oben in der Karte. Er erscheint nur, solange mindestens eine gesendete Meldung noch zutrifft, und verschwindet von selbst, sobald die Ursache behoben ist.
+- Neuer Raumschalter „Türwarnung nur in der Absenkung“ (standardmäßig aus): Die Türwarnung kommt dann nur, solange der Zeitplan des Raums in der Absenkung ist (Komfort und „Absenkung überspringen“ unterdrücken sie). Gedacht für die Küche neben dem durchgehend beheizten Kaminzimmer.
+
 ## 0.6.0
 
 - Die Meldungen „Thermostat nicht erreichbar“ und die Überhitzungswarnung relativ zum Sollwert entfallen (zu viele Fehlalarme bei funktionierenden Thermostaten). Ersatz: Der Admin wird benachrichtigt, wenn ein Thermostat mindestens **25 °C** misst, und zwar **15 Minuten** lang (beides in den Einstellungen änderbar, nur in der Heizperiode; Wiederholung alle 6 Stunden, 08–22 Uhr). Die Meldung „Tür-/Fenstersensor nicht erreichbar“ bleibt.

@@ -6,9 +6,11 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HeatPilotConfigEntry
+from .const import SIGNAL_ALERTS_UPDATED
 from .coordinator import HeatPilotCoordinator
 from .decision import Reason
 from .entity import HeatPilotEntity
@@ -23,7 +25,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities([HeatingPeriodSensor(coordinator)])
+    async_add_entities([HeatingPeriodSensor(coordinator), ActiveAlertsSensor(coordinator)])
     for room_id in coordinator.rooms:
         async_add_entities(
             [RoomStatusSensor(coordinator, room_id)], config_subentry_id=room_id
@@ -88,3 +90,35 @@ class HeatingPeriodSensor(HeatPilotEntity, SensorEntity):
             "end_day": g["period_end"][1],
             "override": g["period_override"],
         }
+
+
+class ActiveAlertsSensor(HeatPilotEntity, SensorEntity):
+    """Number of alerts that were sent and whose cause still exists.
+
+    The ``alerts`` attribute lists them (kind, room, title, message, since);
+    the Heat Pilot card shows that list.
+    """
+
+    _attr_icon = "mdi:bell-alert-outline"
+    _attr_native_unit_of_measurement = None
+
+    def __init__(self, coordinator: HeatPilotCoordinator) -> None:
+        super().__init__(coordinator, "active_alerts")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_ALERTS_UPDATED.format(self.coordinator.config_entry.entry_id),
+                self.async_write_ha_state,
+            )
+        )
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator.active_alerts)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"alerts": list(self.coordinator.active_alerts)}

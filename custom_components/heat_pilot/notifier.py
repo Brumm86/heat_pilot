@@ -2,10 +2,9 @@
 
 Notifications are Android-companion-app style: persistent and sticky, with a
 chronometer, one ``tag`` per condition so repeats replace each other, and
-cleared again as soon as the condition ends. Every phone message is mirrored
-as a persistent notification in Home Assistant's notification centre (same
-``tag``-derived id, dismissed together with the phone message); tapping the
-phone message opens that notification centre.
+cleared again as soon as the condition ends. Tapping a phone message opens the
+configured dashboard, where the Heat Pilot card lists all active alerts (the
+list is published through :attr:`HeatPilotCoordinator.active_alerts`).
 """
 
 from __future__ import annotations
@@ -14,9 +13,9 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components import persistent_notification
 from homeassistant.const import STATE_HOME, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -40,7 +39,9 @@ from .const import (
     DOOR_WARNING_MAX,
     DOOR_WARNING_REPEAT_MINUTES,
     FEATURE_DOOR_WARNING,
+    FEATURE_DOOR_WARNING_SETBACK_ONLY,
     FEATURE_OPENING_SHUTDOWN,
+    SIGNAL_ALERTS_UPDATED,
 )
 from .decision import HVAC_OFF, Reason
 
@@ -54,10 +55,6 @@ _CHANNEL_DOOR = "Heat Pilot Türwarnung"
 _CHANNEL_ALERT = "Heat Pilot Störung"
 
 Key = tuple[str, str]  # (kind, id)
-
-# Opening this query on any dashboard makes the frontend card script show the
-# notification centre (see www/heat-pilot-card.js).
-NOTIFICATIONS_QUERY = "heat_pilot_notifications=1"
 
 _TEXT = {
     "de": {
@@ -118,6 +115,8 @@ class HeatPilotNotifier:
         language = (hass.config.language or "en").split("-")[0]
         self._text = _TEXT.get(language, _TEXT["en"])
         self._episodes: dict[Key, Episode] = {}
+        # Title and text of the last message sent per condition (shown in the card).
+        self._sent_text: dict[Key, tuple[str, str]] = {}
         self._unsub: CALLBACK_TYPE | None = None
 
     # -------------------------------------------------------------- lifecycle
@@ -132,6 +131,12 @@ class HeatPilotNotifier:
         if self._unsub:
             self._unsub()
             self._unsub = None
+        if self.coordinator.active_alerts:
+            self.coordinator.active_alerts = []
+            async_dispatcher_send(
+                self.hass,
+                SIGNAL_ALERTS_UPDATED.format(self.coordinator.config_entry.entry_id),
+            )
 
     # ------------------------------------------------------------------ plans
 
@@ -230,12 +235,21 @@ class HeatPilotNotifier:
             return False
         if not self.coordinator.period_active_today():
             return True
+        status = (self.coordinator.data or {}).get(room_id)
+        if (
+            kind == "door"
+            and self.coordinator.room_state(room_id)["features"][
+                FEATURE_DOOR_WARNING_SETBACK_ONLY
+            ]
+            and status is not None
+            and not status.in_setback
+        ):
+            return True
         room = self.coordinator.rooms.get(room_id)
         if kind == "door" and room is not None and room.externally_heated:
             # Heated outside Home Assistant (e.g. underfloor heating): the
             # thermostats say nothing about whether the room is heated.
             return False
-        status = (self.coordinator.data or {}).get(room_id)
         if status is None:
             return False
         return status.decision.hvac_mode == HVAC_OFF and not status.heated_today
@@ -250,12 +264,9 @@ class HeatPilotNotifier:
         for key in list(self._episodes):
             if key not in active:
                 episode = self._episodes.pop(key)
-                if episode.sent:
-                    persistent_notification.async_dismiss(
-                        self.hass, self._notification_id(key)
-                    )
-                    if key[0] in ("door", "vent"):
-                        await self._async_clear(key)
+                self._sent_text.pop(key, None)
+                if episode.sent and key[0] in ("door", "vent"):
+                    await self._async_clear(key)
         for key, (since, _ctx) in active.items():
             self._episodes.setdefault(key, Episode(since=since))
 
@@ -267,6 +278,32 @@ class HeatPilotNotifier:
                 episode.sent += 1
                 episode.last_sent = now
                 await self._async_send(key, episode, active[key][1], now)
+
+        self._publish_alerts(active)
+
+    def _publish_alerts(self, active: dict[Key, tuple[datetime, dict[str, Any]]]) -> None:
+        """Expose the alerts that were sent and are still going on."""
+        alerts: list[dict[str, str]] = []
+        for key, episode in self._episodes.items():
+            if not episode.sent or key not in active or self._suppressed(key):
+                continue
+            title, message = self._sent_text.get(key, ("", ""))
+            alerts.append(
+                {
+                    "kind": key[0],
+                    "room": str(active[key][1]["room"]),
+                    "title": title,
+                    "message": message,
+                    "since": episode.since.isoformat(),
+                }
+            )
+        alerts.sort(key=lambda a: a["since"])
+        if alerts != self.coordinator.active_alerts:
+            self.coordinator.active_alerts = alerts
+            async_dispatcher_send(
+                self.hass,
+                SIGNAL_ALERTS_UPDATED.format(self.coordinator.config_entry.entry_id),
+            )
 
     # ----------------------------------------------------------------- sending
 
@@ -280,12 +317,11 @@ class HeatPilotNotifier:
         return [self._admin] if self._admin else []
 
     def _click_action(self) -> str:
-        """Dashboard URL that opens Home Assistant's notification centre."""
-        separator = "&" if "?" in self._dashboard else "?"
-        return f"{self._dashboard}{separator}{NOTIFICATIONS_QUERY}"
+        """Dashboard opened when tapping a phone message (shows the active alerts)."""
+        return self._dashboard
 
     @staticmethod
-    def _notification_id(key: Key) -> str:
+    def _tag(key: Key) -> str:
         return f"heat_pilot_{key[0]}_{key[1]}"
 
     def _name(self, entity_id: str) -> str:
@@ -339,17 +375,12 @@ class HeatPilotNotifier:
     async def _async_send(
         self, key: Key, episode: Episode, ctx: dict[str, Any], now: datetime
     ) -> None:
+        title, message, data = self._build(key, episode, ctx, now)
+        self._sent_text[key] = (title, message)
         recipients = self._recipients(key[0])
         if not recipients:
             _LOGGER.debug("No notification recipients for %s", key)
             return
-        title, message, data = self._build(key, episode, ctx, now)
-        persistent_notification.async_create(
-            self.hass,
-            message,
-            title=title,
-            notification_id=self._notification_id(key),
-        )
         for service in recipients:
             await self._async_call(service, {"title": title, "message": message, "data": data})
 
@@ -357,7 +388,7 @@ class HeatPilotNotifier:
         for service in set(self._person_notify.values()):
             await self._async_call(
                 service,
-                {"message": "clear_notification", "data": {"tag": self._notification_id(key)}},
+                {"message": "clear_notification", "data": {"tag": self._tag(key)}},
             )
 
     async def _async_call(self, service: str, payload: dict[str, Any]) -> None:

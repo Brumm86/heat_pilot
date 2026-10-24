@@ -103,6 +103,9 @@
       },
       "skip_setback": {
         "name": "Skip setback"
+      },
+      "door_warning_setback_only": {
+        "name": "Door warning only during setback"
       }
     },
     "number": {
@@ -138,6 +141,9 @@
           "active": "Active",
           "inactive": "Inactive"
         }
+      },
+      "active_alerts": {
+        "name": "Active alerts"
       }
     },
     "binary_sensor": {
