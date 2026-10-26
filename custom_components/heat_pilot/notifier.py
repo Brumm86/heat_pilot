@@ -119,6 +119,9 @@ class HeatPilotNotifier:
         # Title and text of the last message sent per condition (shown in the card).
         self._sent_text: dict[Key, tuple[str, str]] = {}
         self._unsub: CALLBACK_TYPE | None = None
+        # Episodes only live in memory: after a restart/reload a phone message
+        # whose cause vanished meanwhile would stay forever. Cleared once.
+        self._startup_cleared = False
 
     # -------------------------------------------------------------- lifecycle
 
@@ -284,6 +287,10 @@ class HeatPilotNotifier:
         for key, (since, _ctx) in active.items():
             self._episodes.setdefault(key, Episode(since=since))
 
+        if not self._startup_cleared and self.hass.is_running:
+            self._startup_cleared = True
+            await self._async_clear_stale(active)
+
         for key, episode in self._episodes.items():
             if self._suppressed(key):
                 continue
@@ -398,11 +405,31 @@ class HeatPilotNotifier:
         for service in recipients:
             await self._async_call(service, {"title": title, "message": message, "data": data})
 
+    async def _async_clear_stale(
+        self, active: dict[Key, tuple[datetime, dict[str, Any]]]
+    ) -> None:
+        """Remove door/window messages left over from before a restart.
+
+        Conditions that still hold (and will be sent again) are left alone.
+        """
+        for room in self.coordinator.rooms.values():
+            kinds = (("door", room.door_sensors), ("vent", room.window_sensors))
+            for kind, sensors in kinds:
+                key = (kind, room.room_id)
+                if not sensors or (key in active and not self._suppressed(key)):
+                    continue
+                await self._async_clear(key)
+
     async def _async_clear(self, key: Key) -> None:
+        # ttl 0 + high priority: otherwise Android may defer the clear command
+        # (Doze) while the warning itself arrived at once.
         for service in set(self._person_notify.values()):
             await self._async_call(
                 service,
-                {"message": "clear_notification", "data": {"tag": self._tag(key)}},
+                {
+                    "message": "clear_notification",
+                    "data": {"tag": self._tag(key), "ttl": 0, "priority": "high"},
+                },
             )
 
     async def _async_call(self, service: str, payload: dict[str, Any]) -> None:

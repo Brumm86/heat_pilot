@@ -132,6 +132,44 @@ async def test_open_door_turns_off_after_delay_and_restores(
     assert _modes(climate_calls)[-1] == "heat"
 
 
+async def test_manual_switch_on_is_reverted_while_door_shut_the_room_off(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=3, seconds=5)
+    assert _modes(climate_calls)[-1] == "off"
+    climate_calls.clear()
+
+    # Someone switches the radiator on by hand while the door is still open.
+    _set_thermostat(hass, "heat", 22.0)
+    await hass.async_block_till_done()
+    assert _modes(climate_calls) == ["off"]
+
+    # Once the door is closed, heating resumes as usual.
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    assert _modes(climate_calls)[-1] == "heat"
+
+
+async def test_manual_switch_on_is_kept_while_door_open_within_delay(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    climate_calls.clear()
+
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=1)
+    _set_thermostat(hass, "heat", 22.0)
+    await hass.async_block_till_done()
+    assert "off" not in _modes(climate_calls)
+
+
 async def test_unavailable_door_counts_as_closed(
     hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
 ) -> None:

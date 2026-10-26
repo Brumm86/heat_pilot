@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- Türwarnungen verschwinden zuverlässiger vom Handy: Der Befehl zum Entfernen der Meldung wird jetzt wie die Warnung selbst mit `ttl: 0` und `priority: high` gesendet (sonst kann Android ihn im Standby verzögern oder verwerfen).
+- Nach einem Neustart von Home Assistant oder der Integration werden einmalig alle Tür- und Fenstermeldungen entfernt, deren Ursache nicht mehr besteht (vorher blieb eine Meldung stehen, wenn die Tür während des Neustarts geschlossen wurde). Noch zutreffende Warnungen werden wie gewohnt erneut gesendet.
+- Schaltet jemand einen Heizkörper von Hand ein, während der Raum wegen einer offenen Tür oder eines offenen Fensters abgeschaltet ist, wird er sofort wieder ausgeschaltet (vorher blieb die manuelle Änderung bis zum nächsten Ereignis bestehen). Innerhalb der Wartezeit vor der Abschaltung bleibt eine manuelle Änderung unangetastet.
+
 ## 0.8.0
 
 - Neuer Raumschalter „Türwarnung nur beim Heizen“ (standardmäßig aus): Die Türwarnung kommt dann nur, solange der Raum auf Komforttemperatur beheizt wird, d. h. der Zeitplan ist in der Komfortphase (oder „Absenkung überspringen“ ist aktiv) und weder Abwesenheitsmodus noch Raumabwesenheit greifen. Die Abschaltung wegen der offenen Tür selbst zählt nicht dagegen. Eine bereits offene Tür zählt weiter: Beginnt die Komfortphase nach mehr als 5 Minuten offener Tür, kommt die Warnung sofort. Räume ohne Thermostat werden nicht gefiltert. Lässt sich mit „Türwarnung nur in der Absenkung“ kombinieren (beide zusammen unterdrücken die Warnung immer); bestehende Räume bleiben unverändert.

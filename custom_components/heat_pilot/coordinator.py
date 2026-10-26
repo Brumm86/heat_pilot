@@ -8,9 +8,11 @@ for entities (``data`` maps room id -> :class:`RoomStatus`).
 
 Heat Pilot only *acts* on events (schedule change, sensor/person change, a
 toggle, a timer, start-up, midnight). A manual change on a thermostat stays
-until the next such event. Two deliberate exceptions, both requested:
+until the next such event. Three deliberate exceptions, all requested:
 
-* outside the heating period thermostats are forced off again, and
+* outside the heating period thermostats are forced off again,
+* while a room is shut off because a door/window stands open, a manual
+  switch-on is reverted immediately, and
 * a room with the maximum-temperature limit enabled has any setpoint above
   the global maximum pulled back down.
 """
@@ -80,6 +82,7 @@ from .const import (
 from .decision import (
     HVAC_OFF,
     Decision,
+    Reason,
     RoomInputs,
     decide,
     in_heating_period,
@@ -521,6 +524,14 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                 await self._async_climate(
                     SERVICE_SET_HVAC_MODE, entity_id, {ATTR_HVAC_MODE: HVACMode.OFF}
                 )
+            return
+
+        if decide(inputs).reason is Reason.OPENING and state.state != HVACMode.OFF:
+            # The room was shut off because a door/window stands open: a manual
+            # switch-on is reverted right away.
+            await self._async_climate(
+                SERVICE_SET_HVAC_MODE, entity_id, {ATTR_HVAC_MODE: HVACMode.OFF}
+            )
             return
 
         if inputs.max_limit_enabled:

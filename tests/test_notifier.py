@@ -153,6 +153,26 @@ async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
     assert hass.states.get("sensor.heat_pilot_active_alerts").state == "0"
     cleared = [c for _, c in sent if c.data["message"] == "clear_notification"]
     assert {c.data["data"]["tag"] for c in cleared} == {data["tag"]}
+    # The clear command must be delivered at once, not deferred by Android Doze.
+    assert all(c.data["data"]["ttl"] == 0 for c in cleared)
+    assert all(c.data["data"]["priority"] == "high" for c in cleared)
+
+
+async def test_start_clears_leftover_door_and_window_messages(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    """A message whose cause ended during a restart must not stay on the phone."""
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)  # door and window are closed at start
+    room_id = next(iter(_coordinator(hass).rooms))
+    cleared = [c for _, c in sent if c.data["message"] == "clear_notification"]
+    tags = {c.data["data"]["tag"] for c in cleared}
+    assert tags == {f"heat_pilot_door_{room_id}", f"heat_pilot_vent_{room_id}"}
+    # ... on every configured phone, not only on those at home.
+    assert {n for n, c in sent if c.data["message"] == "clear_notification"} == {
+        "mobile_app_alice",
+        "mobile_app_bob",
+    }
 
 
 async def test_no_door_warning_when_room_not_heated_by_thermostat(
