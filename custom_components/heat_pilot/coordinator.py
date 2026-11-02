@@ -14,7 +14,10 @@ until the next such event. Three deliberate exceptions, all requested:
 * while a room is shut off because a door/window stands open, a manual
   switch-on is reverted immediately, and
 * a room with the maximum-temperature limit enabled has any setpoint above
-  the global maximum pulled back down.
+  the global maximum pulled back down (not while the room is boosted).
+
+A room can be boosted: for a configurable time its thermostats are turned up
+to their maximum. The end is persisted and re-armed after a restart.
 """
 
 from __future__ import annotations
@@ -23,12 +26,13 @@ import asyncio
 import logging
 from collections.abc import Coroutine
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.climate import (
     ATTR_HVAC_MODE,
     ATTR_HVAC_MODES,
+    ATTR_MAX_TEMP,
     SERVICE_SET_HVAC_MODE,
     SERVICE_SET_TEMPERATURE,
     HVACMode,
@@ -199,6 +203,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         self._timers: dict[tuple[str, str], CALLBACK_TYPE] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
         self._return_unsub: CALLBACK_TYPE | None = None
+        self._boost_unsubs: dict[str, CALLBACK_TYPE] = {}
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------ setup
@@ -215,6 +220,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
 
         self._register_listeners()
         self._expire_or_schedule_return()
+        self._restore_boosts(now)
         self.async_set_updated_data(self._compute_all(now))
 
         if self.hass.is_running:
@@ -270,6 +276,9 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         for cancel in self._timers.values():
             cancel()
         self._timers.clear()
+        for cancel in self._boost_unsubs.values():
+            cancel()
+        self._boost_unsubs.clear()
         if self._return_unsub:
             self._return_unsub()
             self._return_unsub = None
@@ -394,21 +403,28 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             setback_temp=float(r["setback"]),
             max_limit_enabled=bool(features[FEATURE_MAX_LIMIT]),
             max_temp=float(g["max_temp"]),
+            boost_active=self.boost_active(room.room_id, now),
         )
 
     def _compute_status(self, room: RoomConfig, now: datetime) -> RoomStatus:
         inputs = self._inputs(room, now)
         decision = decide(inputs)
+        room_absent_shutdown = (
+            inputs.absence_shutdown_enabled
+            and inputs.has_persons
+            and inputs.persons_away_beyond_delay
+        )
         in_comfort = (
             bool(room.thermostats)
             and inputs.period_active
             and not inputs.absence_mode
-            and not (
-                inputs.absence_shutdown_enabled
-                and inputs.has_persons
-                and inputs.persons_away_beyond_delay
+            and (
+                inputs.boost_active  # explicit, beats room absence
+                or (
+                    not room_absent_shutdown
+                    and (inputs.schedule_on or inputs.skip_setback)
+                )
             )
-            and (inputs.schedule_on or inputs.skip_setback)
         )
         opening_open = any(sensor_is_open(self._state(e)) for e in room.openings)
         beyond = self._elapsed(
@@ -439,7 +455,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             == dt_util.as_local(now).date().isoformat(),
             in_setback=bool(room.thermostats)
             and self._state(room.schedule or "") != "on"
-            and not self.store.room(room.room_id)["skip_setback"],
+            and not self.store.room(room.room_id)["skip_setback"]
+            and not inputs.boost_active,
             in_comfort=in_comfort,
         )
 
@@ -481,6 +498,13 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                 continue
 
             assert decision.target is not None
+            target = decision.target
+            if decision.reason is Reason.BOOST:
+                # Full blast, but never above what this thermostat accepts.
+                try:
+                    target = min(target, float(state.attributes[ATTR_MAX_TEMP]))
+                except (KeyError, TypeError, ValueError):
+                    pass
             if state.state == HVACMode.OFF:
                 modes = state.attributes.get(ATTR_HVAC_MODES) or []
                 if HVACMode.HEAT not in modes:
@@ -490,11 +514,11 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                     SERVICE_SET_HVAC_MODE, entity_id, {ATTR_HVAC_MODE: HVACMode.HEAT}
                 )
             current = state.attributes.get(ATTR_TEMPERATURE)
-            if current is None or abs(float(current) - decision.target) > _SETPOINT_TOLERANCE:
+            if current is None or abs(float(current) - target) > _SETPOINT_TOLERANCE:
                 await self._async_climate(
                     SERVICE_SET_TEMPERATURE,
                     entity_id,
-                    {ATTR_TEMPERATURE: decision.target},
+                    {ATTR_TEMPERATURE: target},
                 )
 
     async def _async_climate(
@@ -526,7 +550,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                 )
             return
 
-        if decide(inputs).reason is Reason.OPENING and state.state != HVACMode.OFF:
+        reason = decide(inputs).reason
+        if reason is Reason.OPENING and state.state != HVACMode.OFF:
             # The room was shut off because a door/window stands open: a manual
             # switch-on is reverted right away.
             await self._async_climate(
@@ -534,7 +559,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             )
             return
 
-        if inputs.max_limit_enabled:
+        if inputs.max_limit_enabled and reason is not Reason.BOOST:
             setpoint = state.attributes.get(ATTR_TEMPERATURE)
             if setpoint is not None and float(setpoint) > inputs.max_temp + _SETPOINT_TOLERANCE:
                 await self._async_climate(
@@ -610,6 +635,69 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         self.store.room(room_id)["features"][feature] = value
         self.store.schedule_save()
         await self.async_evaluate_room(room_id)
+
+    # -------------------------------------------------------------------- boost
+
+    def boost_until(self, room_id: str) -> datetime | None:
+        """When the room's running boost ends (None if there is none)."""
+        raw = self.store.room(room_id)["boost_until"]
+        return dt_util.parse_datetime(raw) if raw else None
+
+    def boost_active(self, room_id: str, now: datetime | None = None) -> bool:
+        until = self.boost_until(room_id)
+        return until is not None and until > (now or dt_util.utcnow())
+
+    async def async_start_boost(self, room_id: str) -> None:
+        """Heat the room at full power for its configured boost duration."""
+        room = self.rooms.get(room_id)
+        if room is None or not room.thermostats:
+            return
+        room_state = self.store.room(room_id)
+        until = dt_util.utcnow() + timedelta(minutes=float(room_state["boost_minutes"]))
+        room_state["boost_until"] = until.isoformat()
+        self._schedule_boost_end(room_id)
+        self.store.schedule_save()
+        await self.async_evaluate_room(room_id)
+
+    async def async_stop_boost(self, room_id: str) -> None:
+        """End a running boost early; the room returns to its normal target."""
+        if self.rooms.get(room_id) is None:
+            return
+        self._clear_boost(room_id)
+        await self.async_evaluate_room(room_id)
+
+    def _clear_boost(self, room_id: str) -> None:
+        if cancel := self._boost_unsubs.pop(room_id, None):
+            cancel()
+        room_state = self.store.room(room_id)
+        if room_state["boost_until"] is not None:
+            room_state["boost_until"] = None
+            self.store.schedule_save()
+
+    def _schedule_boost_end(self, room_id: str) -> None:
+        if cancel := self._boost_unsubs.pop(room_id, None):
+            cancel()
+        until = self.boost_until(room_id)
+        if until is None:
+            return
+
+        @callback
+        def _end(_now: datetime) -> None:
+            self._boost_unsubs.pop(room_id, None)
+            self._clear_boost(room_id)
+            self._spawn(self.async_evaluate_room(room_id))
+
+        self._boost_unsubs[room_id] = async_track_point_in_time(
+            self.hass, _end, until
+        )
+
+    def _restore_boosts(self, now: datetime) -> None:
+        """After a restart: drop expired boosts, re-arm the running ones."""
+        for room_id in self.rooms:
+            if self.boost_active(room_id, now):
+                self._schedule_boost_end(room_id)
+            else:
+                self._clear_boost(room_id)
 
     # -------------------------------------------------------------- absence end
 

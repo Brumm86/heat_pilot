@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    DEFAULT_BOOST_MINUTES,
     DEFAULT_COMFORT_TEMP,
     DEFAULT_FROST_TEMP,
     DEFAULT_MAX_TEMP,
@@ -48,6 +49,9 @@ def _default_room() -> dict[str, Any]:
         "comfort": DEFAULT_COMFORT_TEMP,
         "setback": DEFAULT_SETBACK_TEMP,
         "skip_setback": False,
+        # Boost: configured duration and, while running, its end (ISO, UTC).
+        "boost_minutes": DEFAULT_BOOST_MINUTES,
+        "boost_until": None,
         "features": {feature: feature not in FEATURES_DEFAULT_OFF for feature in ROOM_FEATURES},
         # ISO date of the last day on which the room asked for heat; used to
         # decide whether a room was "heated today".

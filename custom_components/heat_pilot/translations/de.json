@@ -109,6 +109,9 @@
       },
       "door_warning_heating_only": {
         "name": "Türwarnung nur beim Heizen"
+      },
+      "boost": {
+        "name": "Boost"
       }
     },
     "number": {
@@ -123,6 +126,9 @@
       },
       "setback": {
         "name": "Absenktemperatur"
+      },
+      "boost_minutes": {
+        "name": "Boost-Dauer"
       }
     },
     "sensor": {
@@ -135,7 +141,8 @@
           "room_absent": "Raum nicht belegt",
           "comfort": "Komfort",
           "setback": "Absenkung",
-          "comfort_skipped": "Komfort (Absenkung übersprungen)"
+          "comfort_skipped": "Komfort (Absenkung übersprungen)",
+          "boost": "Boost"
         }
       },
       "heating_period": {

@@ -7,12 +7,18 @@ from homeassistant.components.number import (
     NumberEntity,
     NumberMode,
 )
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HeatPilotConfigEntry
-from .const import MAX_TEMP, MIN_TEMP
+from .const import (
+    BOOST_STEP_MINUTES,
+    MAX_BOOST_MINUTES,
+    MAX_TEMP,
+    MIN_BOOST_MINUTES,
+    MIN_TEMP,
+)
 from .coordinator import HeatPilotCoordinator
 from .entity import HeatPilotEntity
 
@@ -29,14 +35,14 @@ async def async_setup_entry(
             GlobalTemperatureNumber(coordinator, "max_temp", 15.0, MAX_TEMP),
         ]
     )
-    for room_id in coordinator.rooms:
-        async_add_entities(
-            [
-                RoomTemperatureNumber(coordinator, room_id, "comfort"),
-                RoomTemperatureNumber(coordinator, room_id, "setback"),
-            ],
-            config_subentry_id=room_id,
-        )
+    for room_id, room in coordinator.rooms.items():
+        entities: list[NumberEntity] = [
+            RoomTemperatureNumber(coordinator, room_id, "comfort"),
+            RoomTemperatureNumber(coordinator, room_id, "setback"),
+        ]
+        if room.thermostats:
+            entities.append(BoostDurationNumber(coordinator, room_id))
+        async_add_entities(entities, config_subentry_id=room_id)
 
 
 class _TemperatureNumber(HeatPilotEntity, NumberEntity):
@@ -67,6 +73,29 @@ class GlobalTemperatureNumber(_TemperatureNumber):
 
     async def async_set_native_value(self, value: float) -> None:
         await self.coordinator.async_set_global(self._key, float(value))
+
+
+class BoostDurationNumber(HeatPilotEntity, NumberEntity):
+    """How long a room's boost lasts (applies to the next boost)."""
+
+    _attr_device_class = NumberDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_native_min_value = MIN_BOOST_MINUTES
+    _attr_native_max_value = MAX_BOOST_MINUTES
+    _attr_native_step = BOOST_STEP_MINUTES
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator: HeatPilotCoordinator, room_id: str) -> None:
+        super().__init__(coordinator, "boost_minutes", room_id)
+
+    @property
+    def native_value(self) -> float:
+        return float(self.coordinator.room_state(self._room_id)["boost_minutes"])
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.coordinator.async_set_room_value(
+            self._room_id, "boost_minutes", float(value)
+        )
 
 
 class RoomTemperatureNumber(_TemperatureNumber):

@@ -49,6 +49,9 @@
       absence_shutdown: "Aus bei Raumabwesenheit",
       max_limit: "Maximaltemperatur begrenzen",
       skip_setback: "Absenkung heute überspringen",
+      boost: "Boost",
+      boost_until: "bis",
+      boost_minutes: "Boost-Dauer",
       edit_plan: "Plan bearbeiten",
       next_change: "Nächster Wechsel",
       open: "offen",
@@ -91,6 +94,9 @@
       absence_shutdown: "Off when room absent",
       max_limit: "Limit maximum temperature",
       skip_setback: "Skip setback today",
+      boost: "Boost",
+      boost_until: "until",
+      boost_minutes: "Boost duration",
       edit_plan: "Edit schedule",
       next_change: "Next change",
       open: "open",
@@ -127,6 +133,11 @@
   function fmtTemp(value) {
     var n = num(value);
     return n === null ? "–" : n.toFixed(1).replace(".", ",") + " °C";
+  }
+
+  function fmtMinutes(value) {
+    var n = num(value);
+    return n === null ? "–" : Math.round(n) + " min";
   }
 
   var STYLE =
@@ -311,17 +322,18 @@
 
     // ------------------------------------------------------------- render
 
-    _stepper(entityId, label) {
+    _stepper(entityId, label, format) {
       var st = this._state(entityId);
       if (!st) {
         return "";
       }
+      var fmt = format || fmtTemp;
       var unavailable = st.state === "unavailable" || st.state === "unknown";
       return (
         '<div class="row"><span>' + esc(label) + "</span>" +
         '<span class="stepper">' +
         '<button data-act="step" data-ent="' + esc(entityId) + '" data-dir="-1">−</button>' +
-        '<span class="v">' + (unavailable ? "–" : fmtTemp(st.state)) + "</span>" +
+        '<span class="v">' + (unavailable ? "–" : fmt(st.state)) + "</span>" +
         '<button data-act="step" data-ent="' + esc(entityId) + '" data-dir="1">+</button>' +
         "</span></div>"
       );
@@ -487,6 +499,16 @@
       if ((attrs.thermostats || []).length) {
         html += this._stepper(e.comfort, this._t("comfort"));
         html += this._stepper(e.setback, this._t("setback"));
+      }
+      var boost = this._state(e.boost);
+      if (boost) {
+        var until = boost.state === "on" && boost.attributes.ends_at
+          ? this._fmtClock(boost.attributes.ends_at) : "";
+        html += this._toggle(
+          e.boost,
+          this._t("boost") + (until ? " (" + this._t("boost_until") + " " + until + ")" : "")
+        );
+        html += this._stepper(e.boost_minutes, this._t("boost_minutes"), fmtMinutes);
       }
       var self = this;
       ROOM_SWITCHES.forEach(function (key) {

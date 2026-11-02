@@ -54,16 +54,20 @@ def climate_calls(hass: HomeAssistant) -> list[ServiceCall]:
     return calls
 
 
-def _set_thermostat(hass: HomeAssistant, mode: str = "heat", target: float = 17.0):
-    hass.states.async_set(
-        THERMOSTAT,
-        mode,
-        {
-            "hvac_modes": ["off", "heat"],
-            "temperature": target,
-            "current_temperature": 19.0,
-        },
-    )
+def _set_thermostat(
+    hass: HomeAssistant,
+    mode: str = "heat",
+    target: float = 17.0,
+    max_temp: float | None = None,
+):
+    attrs = {
+        "hvac_modes": ["off", "heat"],
+        "temperature": target,
+        "current_temperature": 19.0,
+    }
+    if max_temp is not None:
+        attrs["max_temp"] = max_temp
+    hass.states.async_set(THERMOSTAT, mode, attrs)
 
 
 async def _setup(hass: HomeAssistant) -> MockConfigEntry:
@@ -261,6 +265,84 @@ async def test_max_limit_pulls_down_manual_setpoint(
     _set_thermostat(hass, "heat", 28.0)
     await hass.async_block_till_done()
     assert _temps(climate_calls)[-1] == 24.0
+
+
+async def test_boost_turns_up_fully_and_ends_by_itself(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    entry = await _setup(hass)
+    coordinator = entry.runtime_data
+    room_id = next(iter(entry.subentries))
+    climate_calls.clear()
+
+    await coordinator.async_start_boost(room_id)
+    await hass.async_block_till_done()
+    # Full blast, and the maximum-temperature limit (24) does not pull it back.
+    assert _temps(climate_calls)[-1] == 30.0
+    assert coordinator.boost_active(room_id)
+    assert hass.states.get("sensor.room_status").state == "boost"
+
+    await _advance(hass, freezer, minutes=29)
+    assert coordinator.boost_active(room_id)
+    assert _temps(climate_calls)[-1] == 30.0
+
+    await _advance(hass, freezer, minutes=1, seconds=5)
+    assert not coordinator.boost_active(room_id)
+    assert coordinator.room_state(room_id)["boost_until"] is None
+    assert _temps(climate_calls)[-1] == 21.0
+
+
+async def test_boost_is_capped_at_the_thermostats_own_maximum(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    entry = await _setup(hass)
+    room_id = next(iter(entry.subentries))
+    _set_thermostat(hass, "heat", 21.0, max_temp=25.0)
+    await hass.async_block_till_done()
+    climate_calls.clear()
+
+    await entry.runtime_data.async_start_boost(room_id)
+    await hass.async_block_till_done()
+    assert _temps(climate_calls)[-1] == 25.0
+
+
+async def test_boost_can_be_stopped_early(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    entry = await _setup(hass)
+    coordinator = entry.runtime_data
+    room_id = next(iter(entry.subentries))
+
+    await coordinator.async_start_boost(room_id)
+    await hass.async_block_till_done()
+    await coordinator.async_stop_boost(room_id)
+    await hass.async_block_till_done()
+    assert not coordinator.boost_active(room_id)
+    assert _temps(climate_calls)[-1] == 21.0
+
+
+async def test_open_door_still_shuts_a_boosted_room_off(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    entry = await _setup(hass)
+    room_id = next(iter(entry.subentries))
+    await entry.runtime_data.async_start_boost(room_id)
+    await hass.async_block_till_done()
+
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=3, seconds=5)
+    assert _modes(climate_calls)[-1] == "off"
+
+    # The boost goes on once the door is closed again.
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    assert _modes(climate_calls)[-1] == "heat"
+    assert _temps(climate_calls)[-1] == 30.0
 
 
 async def test_unload_and_reload(

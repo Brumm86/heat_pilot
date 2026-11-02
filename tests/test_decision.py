@@ -5,6 +5,7 @@ from datetime import date
 
 import pytest
 
+from custom_components.heat_pilot.const import BOOST_TEMP
 from custom_components.heat_pilot.decision import (
     HVAC_HEAT,
     HVAC_OFF,
@@ -141,6 +142,36 @@ def test_max_limit_clamps_targets() -> None:
     assert result.target == 24.0
     unlimited = decide(replace(BASE, comfort_temp=26.0, max_limit_enabled=False))
     assert unlimited.target == 26.0
+
+
+def test_boost_heats_to_maximum_and_ignores_the_max_limit() -> None:
+    result = decide(replace(BASE, boost_active=True))
+    assert (result.hvac_mode, result.target, result.reason) == (
+        HVAC_HEAT,
+        BOOST_TEMP,
+        Reason.BOOST,
+    )
+    assert result.target > BASE.max_temp  # the limit of 24 does not apply
+
+
+def test_boost_beats_schedule_and_room_absence() -> None:
+    result = decide(
+        replace(
+            BASE,
+            boost_active=True,
+            schedule_on=False,
+            has_persons=True,
+            persons_away_beyond_delay=True,
+        )
+    )
+    assert result.reason is Reason.BOOST
+
+
+def test_open_door_absence_mode_and_period_beat_boost() -> None:
+    boosted = replace(BASE, boost_active=True)
+    assert decide(replace(boosted, opening_open_beyond_delay=True)).reason is Reason.OPENING
+    assert decide(replace(boosted, absence_mode=True)).reason is Reason.ABSENCE_MODE
+    assert decide(replace(boosted, period_active=False)).reason is Reason.OUTSIDE_PERIOD
 
 
 def test_clamp_target() -> None:

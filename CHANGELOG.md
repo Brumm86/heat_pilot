@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+- Neue Boost-Funktion für jeden Raum mit Thermostat: Der Raumschalter „Boost“ dreht die Heizung für eine einstellbare Zeit voll auf (Zahl „Boost-Dauer“ je Raum, Standard 30 Minuten, 5–240 in 5er-Schritten) und kehrt danach von selbst zum normalen Zeitplan zurück; vorzeitiges Ausschalten des Schalters beendet den Boost sofort. Die Solltemperatur ist 30 °C, begrenzt auf das Maximum des jeweiligen Thermostats. Der Schalter zeigt die Endzeit im Attribut `ends_at`, der Raumstatus lautet „Boost“. Der Boost überlebt einen Neustart von Home Assistant.
+- Rangfolge: Der Boost steht unter Heizperiode, Abwesenheitsmodus und offener Tür/offenem Fenster (diese schalten weiter ab oder gehen vor; nach dem Schließen läuft der Boost bis zum Ende weiter), aber über Raumabwesenheit, Zeitplan und der Maximaltemperatur-Begrenzung.
+- Karte: Pro Raum Boost-Schalter (mit „bis hh:mm“) und Einstellung der Boost-Dauer.
+
 ## 0.8.1
 
 - Türwarnungen verschwinden zuverlässiger vom Handy: Der Befehl zum Entfernen der Meldung wird jetzt wie die Warnung selbst mit `ttl: 0` und `priority: high` gesendet (sonst kann Android ihn im Standby verzögern oder verwerfen).

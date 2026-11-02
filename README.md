@@ -6,6 +6,7 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 - Zeitplangesteuerte Temperatur mit Absenkung (vorhandener `schedule`-Helfer: an = Komfort, aus = Absenkung)
 - „Absenkung überspringen“ pro Raum (einmalig, endet automatisch zum nächsten Komfortbeginn)
+- „Boost“ pro Raum: volle Heizleistung für eine einstellbare Zeit (Standard 30 Minuten), danach zurück zum Zeitplan
 - Abschalten bei offener Tür oder offenem Fenster (Wartezeit einstellbar)
 - Abschalten, wenn alle zugeordneten Personen länger abwesend sind
 - Abwesenheitsmodus für das ganze Haus (Frostschutz) mit optionaler Rückkehrzeit
@@ -19,8 +20,9 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 1. Außerhalb der Heizperiode: Thermostate aus
 2. Abwesenheitsmodus: Frostschutztemperatur
 3. Tür/Fenster länger offen als die Wartezeit: aus
-4. Alle Raum-Personen länger abwesend: aus
-5. Zeitplan: Komfort- oder Absenktemperatur
+4. Boost (zeitlich begrenzt, manuell gestartet): 30 °C bzw. Maximum des Thermostats, ignoriert die Maximaltemperatur-Begrenzung
+5. Alle Raum-Personen länger abwesend: aus
+6. Zeitplan: Komfort- oder Absenktemperatur
 
 ## Installation (HACS)
 

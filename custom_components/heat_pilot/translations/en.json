@@ -109,6 +109,9 @@
       },
       "door_warning_heating_only": {
         "name": "Door warning only while heating"
+      },
+      "boost": {
+        "name": "Boost"
       }
     },
     "number": {
@@ -123,6 +126,9 @@
       },
       "setback": {
         "name": "Setback temperature"
+      },
+      "boost_minutes": {
+        "name": "Boost duration"
       }
     },
     "sensor": {
@@ -135,7 +141,8 @@
           "room_absent": "Room absent",
           "comfort": "Comfort",
           "setback": "Setback",
-          "comfort_skipped": "Comfort (setback skipped)"
+          "comfort_skipped": "Comfort (setback skipped)",
+          "boost": "Boost"
         }
       },
       "heating_period": {

@@ -34,6 +34,14 @@ DEFAULT_PERIOD_END = (4, 30)  # 30 April
 MIN_TEMP = 5.0
 MAX_TEMP = 30.0
 
+# Boost: a room is heated "full blast" for a while. The target is the highest
+# setpoint Heat Pilot knows; each thermostat is capped at its own maximum.
+BOOST_TEMP = MAX_TEMP
+DEFAULT_BOOST_MINUTES = 30
+MIN_BOOST_MINUTES = 5
+MAX_BOOST_MINUTES = 240
+BOOST_STEP_MINUTES = 5
+
 # Per-room feature toggles (switch entities). Keys double as translation keys.
 FEATURE_DOOR_WARNING = "door_warning"
 FEATURE_OPENING_SHUTDOWN = "opening_shutdown"

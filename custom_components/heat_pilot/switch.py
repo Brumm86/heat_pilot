@@ -29,6 +29,8 @@ async def async_setup_entry(
             for feature in ROOM_FEATURES
         ]
         entities.append(SkipSetbackSwitch(coordinator, room_id))
+        if coordinator.rooms[room_id].thermostats:
+            entities.append(BoostSwitch(coordinator, room_id))
         async_add_entities(entities, config_subentry_id=room_id)
 
 
@@ -88,6 +90,32 @@ class RoomFeatureSwitch(HeatPilotEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_room_feature(self._room_id, self._feature, False)
+
+
+class BoostSwitch(HeatPilotEntity, SwitchEntity):
+    """Heat the room at full power for the configured time, then return to normal."""
+
+    _attr_icon = "mdi:fire"
+
+    def __init__(self, coordinator: HeatPilotCoordinator, room_id: str) -> None:
+        super().__init__(coordinator, "boost", room_id)
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.boost_active(self._room_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        until = self.coordinator.boost_until(self._room_id)
+        if until is None or not self.is_on:
+            return None
+        return {"ends_at": until.isoformat()}
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_start_boost(self._room_id)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.async_stop_boost(self._room_id)
 
 
 class SkipSetbackSwitch(HeatPilotEntity, SwitchEntity):

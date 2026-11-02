@@ -9,8 +9,9 @@ Priority (highest first):
 1. Outside the heating period      -> off
 2. Absence mode (whole house)      -> frost protection (mode ``heat``)
 3. Door/window open beyond delay   -> off
-4. Room absent (its persons away)  -> off
-5. Schedule                        -> comfort or setback
+4. Boost (explicit, time-limited)  -> full heat, ignores the maximum limit
+5. Room absent (its persons away)  -> off
+6. Schedule                        -> comfort or setback
    (the one-shot "skip setback" flag turns a setback phase into comfort)
 """
 
@@ -19,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
+
+from .const import BOOST_TEMP
 
 
 class Reason(StrEnum):
@@ -31,6 +34,7 @@ class Reason(StrEnum):
     COMFORT = "comfort"
     SETBACK = "setback"
     COMFORT_SKIPPED = "comfort_skipped"
+    BOOST = "boost"
 
 
 HVAC_OFF = "off"
@@ -63,6 +67,8 @@ class RoomInputs:
     # Global maximum, applied to every heating target if enabled.
     max_limit_enabled: bool
     max_temp: float
+    # A running boost (the caller checks its end time).
+    boost_active: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +100,10 @@ def decide(inputs: RoomInputs) -> Decision:
 
     if inputs.opening_shutdown_enabled and inputs.opening_open_beyond_delay:
         return Decision(HVAC_OFF, None, Reason.OPENING)
+
+    if inputs.boost_active:
+        # Asked for explicitly, so it beats room absence and the maximum limit.
+        return Decision(HVAC_HEAT, BOOST_TEMP, Reason.BOOST)
 
     if (
         inputs.absence_shutdown_enabled
