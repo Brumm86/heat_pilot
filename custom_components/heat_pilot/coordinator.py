@@ -16,6 +16,11 @@ until the next such event. Three deliberate exceptions, all requested:
 * a room with the maximum-temperature limit enabled has any setpoint above
   the global maximum pulled back down (not while the room is boosted).
 
+Door/window events never touch the setpoint: while the delay runs nothing
+happens at all, the shutdown only switches the thermostats off, and after
+closing they are switched back on with the setpoint they have - unless the
+room's plan target changed in the meantime (then the new target is set).
+
 A room can be boosted: for a configurable time its thermostats are turned up
 to their maximum. The end is persisted and re-armed after a restart.
 """
@@ -25,7 +30,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -102,6 +107,11 @@ _TIMER_SLACK_SECONDS = 1.0
 _SETPOINT_TOLERANCE = 0.05
 
 _NOT_REPORTING = (STATE_UNAVAILABLE, STATE_UNKNOWN)
+
+# How an evaluation applies its decision to the thermostats.
+_APPLY_FULL = "full"  # mode and setpoint
+_APPLY_KEEP_SETPOINT = "keep_setpoint"  # mode only, setpoint stays as it is
+_APPLY_NONE = "none"  # do not touch the thermostats
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,7 +321,11 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                     self.store.schedule_save()
 
             self._refresh_timers(room, now)
-            self._spawn(self.async_evaluate_room(room_id))
+            self._spawn(
+                self.async_evaluate_room(
+                    room_id, opening_event=entity_id in room.openings
+                )
+            )
 
     @callback
     def _async_midnight(self, _now: datetime) -> None:
@@ -472,8 +486,47 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         for room_id in self.rooms:
             await self.async_evaluate_room(room_id)
 
-    async def async_evaluate_room(self, room_id: str) -> None:
-        """Decide for one room, apply it to its thermostats, publish status."""
+    def _apply_policy(
+        self,
+        room: RoomConfig,
+        now: datetime,
+        decision: Decision,
+        opening_event: bool,
+    ) -> str:
+        """Decide how far ``decision`` may touch the thermostats.
+
+        A door/window shutdown remembers the plan target of the moment. When
+        the room is released again, the setpoint is only set if that target
+        changed meanwhile; otherwise the thermostat keeps what it has (e.g. a
+        manual setting). A door/window event that neither starts nor ends a
+        shutdown (the delay is still running, a flapping sensor) does nothing.
+        """
+        room_state = self.store.room(room.room_id)
+        shutdown_plan = room_state["opening_plan"]
+        if decision.reason is Reason.OPENING:
+            if shutdown_plan is None:
+                plan = decide(
+                    replace(self._inputs(room, now), opening_open_beyond_delay=False)
+                )
+                room_state["opening_plan"] = [plan.hvac_mode, plan.target]
+                self.store.schedule_save()
+            return _APPLY_FULL
+        if shutdown_plan is not None:
+            room_state["opening_plan"] = None
+            self.store.schedule_save()
+            if [decision.hvac_mode, decision.target] == shutdown_plan:
+                return _APPLY_KEEP_SETPOINT
+            return _APPLY_FULL
+        return _APPLY_NONE if opening_event else _APPLY_FULL
+
+    async def async_evaluate_room(
+        self, room_id: str, *, opening_event: bool = False
+    ) -> None:
+        """Decide for one room, apply it to its thermostats, publish status.
+
+        ``opening_event`` marks an evaluation caused by a door/window sensor
+        changing its state (see :meth:`_apply_policy`).
+        """
         room = self.rooms.get(room_id)
         if room is None:
             return
@@ -482,10 +535,18 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             self._refresh_timers(room, now)
             self._note_heating(room, now)
             status = self._compute_status(room, now)
-            await self._async_apply(room, status.decision)
+            policy = self._apply_policy(room, now, status.decision, opening_event)
+            if policy != _APPLY_NONE:
+                await self._async_apply(
+                    room,
+                    status.decision,
+                    keep_setpoint=policy == _APPLY_KEEP_SETPOINT,
+                )
             self.async_set_updated_data({**(self.data or {}), room_id: status})
 
-    async def _async_apply(self, room: RoomConfig, decision: Decision) -> None:
+    async def _async_apply(
+        self, room: RoomConfig, decision: Decision, *, keep_setpoint: bool = False
+    ) -> None:
         for entity_id in room.thermostats:
             state = self.hass.states.get(entity_id)
             if state is None or state.state in _NOT_REPORTING:
@@ -514,6 +575,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                     SERVICE_SET_HVAC_MODE, entity_id, {ATTR_HVAC_MODE: HVACMode.HEAT}
                 )
             current = state.attributes.get(ATTR_TEMPERATURE)
+            if current is not None and keep_setpoint:
+                continue  # released after a door/window shutdown: setpoint stays
             if current is None or abs(float(current) - target) > _SETPOINT_TOLERANCE:
                 await self._async_climate(
                     SERVICE_SET_TEMPERATURE,
@@ -559,7 +622,9 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             )
             return
 
-        if inputs.max_limit_enabled and reason is not Reason.BOOST:
+        # A running boost keeps its setpoint even while a door/window or absence
+        # shutdown overrides it, so it is still in place when the room is released.
+        if inputs.max_limit_enabled and not inputs.boost_active:
             setpoint = state.attributes.get(ATTR_TEMPERATURE)
             if setpoint is not None and float(setpoint) > inputs.max_temp + _SETPOINT_TOLERANCE:
                 await self._async_climate(

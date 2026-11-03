@@ -56,6 +56,9 @@ def _default_room() -> dict[str, Any]:
         # ISO date of the last day on which the room asked for heat; used to
         # decide whether a room was "heated today".
         "heated_day": None,
+        # While a door/window shutdown lasts: [hvac_mode, target] the room's plan
+        # had when it started. Decides whether the setpoint is set on release.
+        "opening_plan": None,
     }
 
 

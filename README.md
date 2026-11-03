@@ -1,6 +1,6 @@
 # Heat Pilot
 
-Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheidet pro Raum, ob und wie warm geheizt wird, und greift dabei **nur bei Ereignissen** ein (Zeitplanwechsel, Sensoränderung, Schalter, Timer, Start von Home Assistant). Manuelle Änderungen am Thermostat bleiben bis zum nächsten Ereignis bestehen.
+Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheidet pro Raum, ob und wie warm geheizt wird, und greift dabei **nur bei Ereignissen** ein (Zeitplanwechsel, Sensoränderung, Schalter, Timer, Start von Home Assistant). Manuelle Änderungen am Thermostat bleiben bis zum nächsten Ereignis bestehen. Tür-/Fenstersensor-Ereignisse lassen den Sollwert unangetastet: Heat Pilot schaltet die Thermostate nur aus und nach dem Schließen wieder ein; der Sollwert wird nur gesetzt, wenn sich das Planziel des Raums in der Zwischenzeit geändert hat.
 
 ## Funktionen
 

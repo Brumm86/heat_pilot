@@ -174,6 +174,77 @@ async def test_manual_switch_on_is_kept_while_door_open_within_delay(
     assert "off" not in _modes(climate_calls)
 
 
+async def test_door_events_within_delay_leave_the_setpoint_alone(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    _set_thermostat(hass, "heat", 23.0)  # manual setting, plan says 21
+    await hass.async_block_till_done()
+    climate_calls.clear()
+
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=1)
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    assert climate_calls == []
+    assert hass.states.get(THERMOSTAT).attributes["temperature"] == 23.0
+
+
+async def test_setpoint_is_kept_when_the_room_is_released_after_a_door_shutdown(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    entry = await _setup(hass)
+    room_id = next(iter(entry.subentries))
+
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=3, seconds=5)
+    assert _modes(climate_calls)[-1] == "off"
+    assert entry.runtime_data.room_state(room_id)["opening_plan"] == ["heat", 21.0]
+
+    # The setpoint is changed by hand while the thermostat is off.
+    _set_thermostat(hass, "off", 23.0)
+    await hass.async_block_till_done()
+    climate_calls.clear()
+
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    assert _modes(climate_calls) == ["heat"]
+    assert _temps(climate_calls) == []
+    assert hass.states.get(THERMOSTAT).attributes["temperature"] == 23.0
+    assert entry.runtime_data.room_state(room_id)["opening_plan"] is None
+
+
+async def test_plan_target_is_set_on_release_when_the_plan_changed_meanwhile(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=3, seconds=5)
+    assert _modes(climate_calls)[-1] == "off"
+
+    # The comfort phase ends while the door is still open (room stays off).
+    hass.states.async_set(SCHEDULE, "off")
+    await hass.async_block_till_done()
+    assert _modes(climate_calls)[-1] == "off"
+    climate_calls.clear()
+
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    assert _modes(climate_calls) == ["heat"]
+    assert _temps(climate_calls)[-1] == 17.0
+
+
 async def test_unavailable_door_counts_as_closed(
     hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
 ) -> None:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0
+
+- Tür-/Fenstersensor-Ereignisse lassen den Sollwert jetzt unangetastet: Solange die Wartezeit läuft (auch bei einem flatternden Sensor), tut Heat Pilot nichts; die Abschaltung schaltet die Thermostate nur aus; nach dem Schließen werden sie wieder auf Heizen geschaltet und behalten ihren Sollwert (z. B. eine Handeinstellung). Nur wenn sich das Planziel des Raums zwischen Abschaltung und Wiedereinschalten geändert hat (Komfort/Absenkung, Abwesenheitsmodus, Boost-Ende), wird das neue Planziel gesetzt. Vorher wurde bei jedem Türereignis der Sollwert auf das Planziel zurückgesetzt.
+- Ein laufender Boost behält seinen Sollwert (30 °C bzw. Thermostat-Maximum) jetzt auch während einer Abschaltung wegen offener Tür; die Maximaltemperatur-Begrenzung kappt ihn dabei nicht mehr.
+- Unverändert: Wird ein Raum wegen offener Tür abgeschaltet, nimmt Heat Pilot ein manuelles Einschalten sofort zurück; alle anderen Ereignisse (Zeitplan, Personen, Abwesenheitsmodus, Mitternacht) setzen den Sollwert wie bisher.
+
 ## 0.9.0
 
 - Neue Boost-Funktion für jeden Raum mit Thermostat: Der Raumschalter „Boost“ dreht die Heizung für eine einstellbare Zeit voll auf (Zahl „Boost-Dauer“ je Raum, Standard 30 Minuten, 5–240 in 5er-Schritten) und kehrt danach von selbst zum normalen Zeitplan zurück; vorzeitiges Ausschalten des Schalters beendet den Boost sofort. Die Solltemperatur ist 30 °C, begrenzt auf das Maximum des jeweiligen Thermostats. Der Schalter zeigt die Endzeit im Attribut `ends_at`, der Raumstatus lautet „Boost“. Der Boost überlebt einen Neustart von Home Assistant.
