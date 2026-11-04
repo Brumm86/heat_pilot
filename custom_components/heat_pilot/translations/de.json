@@ -49,6 +49,7 @@
             "door_sensors": "Türsensoren",
             "window_sensors": "Fenstersensoren",
             "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
+            "notify_persons": "Personen, deren Handys Tür-/Lüftungsmeldungen bekommen (leer = alle)",
             "open_delay_minutes": "Minuten offen bis zum Abschalten",
             "absence_delay_minutes": "Minuten abwesend bis zum Abschalten",
             "external_heating": "Raum wird anders beheizt (z. B. Fußbodenheizung): Türwarnung auch ohne Heizen über Thermostat"
@@ -64,6 +65,7 @@
             "door_sensors": "Türsensoren",
             "window_sensors": "Fenstersensoren",
             "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
+            "notify_persons": "Personen, deren Handys Tür-/Lüftungsmeldungen bekommen (leer = alle)",
             "open_delay_minutes": "Minuten offen bis zum Abschalten",
             "absence_delay_minutes": "Minuten abwesend bis zum Abschalten",
             "external_heating": "Raum wird anders beheizt (z. B. Fußbodenheizung): Türwarnung auch ohne Heizen über Thermostat"

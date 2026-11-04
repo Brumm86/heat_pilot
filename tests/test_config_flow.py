@@ -150,3 +150,33 @@ async def test_options_flow_maps_persons_to_phones(hass: HomeAssistant) -> None:
     assert entry.options["person_notify"] == {"person.alice": "mobile_app_alice"}
     assert entry.options["admin_notify"] == "mobile_app_admin"
     assert entry.options["dashboard_path"] == "/dash"
+
+
+async def test_room_notify_persons_are_limited_to_persons_with_a_phone(
+    hass: HomeAssistant,
+) -> None:
+    import pytest
+    import voluptuous as vol
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        title="Heat Pilot",
+        options={"person_notify": {"person.alice": "mobile_app_alice"}},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ROOM), context={"source": "user"}
+    )
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {**ROOM_INPUT, "notify_persons": ["person.bob"]}
+        )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**ROOM_INPUT, "notify_persons": ["person.alice"]}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["notify_persons"] == ["person.alice"]

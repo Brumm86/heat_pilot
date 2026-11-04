@@ -328,12 +328,19 @@ class HeatPilotNotifier:
 
     # ----------------------------------------------------------------- sending
 
-    def _recipients(self, kind: str) -> list[str]:
+    def _recipients(self, key: Key) -> list[str]:
+        kind, ident = key
         if kind in ("door", "vent"):
+            # Door/ventilation messages go to the phones chosen for the room
+            # (all phones if none were chosen), but only to persons at home.
+            room = self.coordinator.rooms.get(ident)
+            chosen = set(room.notify_persons) if room else set()
             return [
                 service
                 for person, service in self._person_notify.items()
-                if (s := self._state(person)) is not None and s.state == STATE_HOME
+                if (not chosen or person in chosen)
+                and (s := self._state(person)) is not None
+                and s.state == STATE_HOME
             ]
         return [self._admin] if self._admin else []
 
@@ -398,7 +405,7 @@ class HeatPilotNotifier:
     ) -> None:
         title, message, data = self._build(key, episode, ctx, now)
         self._sent_text[key] = (title, message)
-        recipients = self._recipients(key[0])
+        recipients = self._recipients(key)
         if not recipients:
             _LOGGER.debug("No notification recipients for %s", key)
             return

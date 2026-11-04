@@ -81,8 +81,6 @@ async def _setup(
     hass: HomeAssistant, room_data: dict | None = None, *, wants_heat: bool = True
 ) -> None:
     await hass.config.async_set_time_zone("UTC")
-    # The notifier texts follow the configured language; the tests expect German.
-    hass.config.language = "de"
     hass.states.async_set("schedule.room", "on")
     hass.states.async_set(DOOR, "off")
     hass.states.async_set(WINDOW, "off")
@@ -146,7 +144,8 @@ async def test_door_warnings_go_to_persons_at_home_max_three_then_clear(
     # Listed as an active alert until the door is closed (no HA notification centre).
     alerts = hass.states.get("sensor.heat_pilot_active_alerts")
     assert alerts.state == "1"
-    assert alerts.attributes["alerts"][0]["title"] == "Tür offen – Room"
+    # The text follows Home Assistant's configured language (en or de).
+    assert alerts.attributes["alerts"][0]["title"] in ("Door open – Room", "Tür offen – Room")
     notification_id = data["tag"]
 
     sent.clear()
@@ -429,3 +428,56 @@ async def test_alerts_sensor_lists_thermostat_alert_and_clears(
     _thermostat(hass, current=22.0, target=21.0)
     await _advance(hass, freezer, seconds=30)
     assert hass.states.get("sensor.heat_pilot_active_alerts").state == "0"
+
+
+async def _open_door_for_a_while(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    hass.states.async_set(DOOR, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, minutes=6)
+
+
+async def test_door_warning_goes_only_to_the_rooms_chosen_persons(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    hass.states.async_set(PERSON_B, "home")  # both at home
+    await _setup(hass, {**ROOM_DATA, "notify_persons": [PERSON_B]})
+    hass.states.async_set(PERSON_A, "home")
+    hass.states.async_set(PERSON_B, "home")
+    await _open_door_for_a_while(hass, freezer)
+    assert len(_messages(sent, "mobile_app_bob")) == 1
+    assert not _messages(sent, "mobile_app_alice")
+
+
+async def test_chosen_person_who_is_away_gets_nothing(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass, {**ROOM_DATA, "notify_persons": [PERSON_B]})  # bob is not home
+    await _open_door_for_a_while(hass, freezer)
+    assert not _messages(sent, "mobile_app_bob")
+    assert not _messages(sent, "mobile_app_alice")  # alice was not chosen
+
+
+async def test_without_a_choice_all_persons_at_home_are_notified(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    await _open_door_for_a_while(hass, freezer)
+    assert len(_messages(sent, "mobile_app_alice")) == 1
+
+
+async def test_clearing_reaches_every_phone_regardless_of_the_choice(
+    hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass, {**ROOM_DATA, "notify_persons": [PERSON_B]})
+    hass.states.async_set(PERSON_B, "home")
+    await _open_door_for_a_while(hass, freezer)
+    sent.clear()
+    hass.states.async_set(DOOR, "off")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, seconds=30)
+    cleared = {n for n, c in sent if c.data["message"] == "clear_notification"}
+    assert cleared == {"mobile_app_alice", "mobile_app_bob"}

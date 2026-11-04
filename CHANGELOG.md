@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.0
+
+- Die Empfänger der Tür- und Lüftungsmeldungen sind jetzt je Raum einstellbar: In den Raum-Einstellungen gibt es die Auswahl „Personen, deren Handys Tür-/Lüftungsmeldungen bekommen“ (zur Wahl stehen die Personen, für die in den Benachrichtigungs-Optionen ein Handy hinterlegt ist). Die Meldungen des Raums gehen nur an die gewählten Personen, und wie bisher nur, solange diese zu Hause sind. Bleibt die Auswahl leer, gilt das bisherige Verhalten (alle Personen mit Handy, die zu Hause sind); bestehende Räume ändern sich nicht. Störungsmeldungen gehen weiter nur an das Admin-Handy; das Entfernen einer beendeten Meldung geht weiter an alle hinterlegten Handys.
+
 ## 0.12.0
 
 - Neuer globaler Schalter „Heizperiode pausieren“: Solange er an ist, gilt die Heizperiode als inaktiv – unabhängig vom Datum und von „Heizperiode erzwingen“. Alle Thermostate werden ausgeschaltet und von Hand eingeschaltete oder verstellte Thermostate sofort wieder ausgeschaltet. Auch ein Boost heizt dann nicht: Ein laufender Boost endet mit der Heizperiode, und die Karte blendet den Boost-Schalter (und die Boost-Dauer) aus, solange die Heizperiode inaktiv ist.

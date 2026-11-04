@@ -81,6 +81,7 @@ from .const import (
     CONF_ABSENCE_DELAY,
     CONF_DOOR_SENSORS,
     CONF_EXTERNAL_HEATING,
+    CONF_NOTIFY_PERSONS,
     CONF_OPEN_DELAY,
     CONF_PERSONS,
     CONF_SCHEDULE,
@@ -136,6 +137,9 @@ class RoomConfig:
     absence_delay: int
     # Room is (also) heated outside Home Assistant, e.g. by underfloor heating.
     external_heating: bool = False
+    # Persons whose phones receive the room's door/ventilation messages;
+    # empty means every person with a phone.
+    notify_persons: tuple[str, ...] = ()
 
     @property
     def externally_heated(self) -> bool:
@@ -168,6 +172,7 @@ class RoomConfig:
             open_delay=int(data.get(CONF_OPEN_DELAY, DEFAULT_OPEN_DELAY)),
             absence_delay=int(data.get(CONF_ABSENCE_DELAY, DEFAULT_ABSENCE_DELAY)),
             external_heating=bool(data.get(CONF_EXTERNAL_HEATING, False)),
+            notify_persons=tuple(data.get(CONF_NOTIFY_PERSONS, [])),
         )
 
 

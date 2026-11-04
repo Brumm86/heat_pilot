@@ -38,6 +38,7 @@ from .const import (
     CONF_DASHBOARD_PATH,
     CONF_DOOR_SENSORS,
     CONF_EXTERNAL_HEATING,
+    CONF_NOTIFY_PERSONS,
     CONF_OPEN_DELAY,
     CONF_OVERHEAT_MINUTES,
     CONF_OVERHEAT_TEMP,
@@ -62,8 +63,12 @@ from .const import (
 DEFAULT_TITLE = "Heat Pilot"
 
 
-def _room_schema() -> vol.Schema:
-    """Schema of the room form (shared by add and reconfigure)."""
+def _room_schema(notify_persons: list[str] | None = None) -> vol.Schema:
+    """Schema of the room form (shared by add and reconfigure).
+
+    ``notify_persons`` are the persons that have a phone assigned in the
+    notification options; only they can be chosen as message recipients.
+    """
     return vol.Schema(
         {
             vol.Required(CONF_NAME): TextSelector(),
@@ -82,6 +87,13 @@ def _room_schema() -> vol.Schema:
             ),
             vol.Optional(CONF_PERSONS, default=[]): EntitySelector(
                 EntitySelectorConfig(domain="person", multiple=True)
+            ),
+            vol.Optional(CONF_NOTIFY_PERSONS, default=[]): EntitySelector(
+                EntitySelectorConfig(
+                    domain="person",
+                    multiple=True,
+                    **({"include_entities": notify_persons} if notify_persons else {}),
+                )
             ),
             vol.Required(CONF_OPEN_DELAY, default=DEFAULT_OPEN_DELAY): NumberSelector(
                 NumberSelectorConfig(
@@ -171,7 +183,9 @@ class RoomSubentryFlow(ConfigSubentryFlow):
 
         return self.async_show_form(
             step_id=step_id,
-            data_schema=self.add_suggested_values_to_schema(_room_schema(), suggested),
+            data_schema=self.add_suggested_values_to_schema(
+                _room_schema(list(entry.options.get(CONF_PERSON_NOTIFY, {}))), suggested
+            ),
             errors=errors,
         )
 

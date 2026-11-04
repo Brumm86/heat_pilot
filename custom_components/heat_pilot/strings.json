@@ -49,6 +49,7 @@
             "door_sensors": "Door sensors",
             "window_sensors": "Window sensors",
             "persons": "Persons (room is shut off when all are away)",
+            "notify_persons": "Persons whose phones get door/ventilation messages (none = all)",
             "open_delay_minutes": "Minutes open before shutting off",
             "absence_delay_minutes": "Minutes away before shutting off",
             "external_heating": "Room is heated differently (e.g. underfloor heating): door warning even without heating via thermostat"
@@ -64,6 +65,7 @@
             "door_sensors": "Door sensors",
             "window_sensors": "Window sensors",
             "persons": "Persons (room is shut off when all are away)",
+            "notify_persons": "Persons whose phones get door/ventilation messages (none = all)",
             "open_delay_minutes": "Minutes open before shutting off",
             "absence_delay_minutes": "Minutes away before shutting off",
             "external_heating": "Room is heated differently (e.g. underfloor heating): door warning even without heating via thermostat"
