@@ -11,7 +11,8 @@ Priority (highest first):
 3. Door/window open beyond delay   -> off
 4. Boost (explicit, time-limited)  -> full heat, ignores the maximum limit
 5. Room absent (its persons away)  -> off
-6. Schedule                        -> comfort or setback
+6. Schedule paused for today      -> setback
+7. Schedule                        -> comfort or setback
    (the one-shot "skip setback" flag turns a setback phase into comfort)
 """
 
@@ -35,6 +36,7 @@ class Reason(StrEnum):
     SETBACK = "setback"
     COMFORT_SKIPPED = "comfort_skipped"
     BOOST = "boost"
+    PLAN_PAUSED = "plan_paused"
 
 
 HVAC_OFF = "off"
@@ -69,6 +71,8 @@ class RoomInputs:
     max_temp: float
     # A running boost (the caller checks its end time).
     boost_active: bool = False
+    # The schedule is paused for today: the room stays in its setback phase.
+    plan_paused: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +116,10 @@ def decide(inputs: RoomInputs) -> Decision:
     ):
         return Decision(HVAC_OFF, None, Reason.ROOM_ABSENT)
 
-    if inputs.schedule_on:
+    if inputs.plan_paused:
+        reason = Reason.PLAN_PAUSED
+        target = inputs.setback_temp
+    elif inputs.schedule_on:
         reason = Reason.COMFORT
         target = inputs.comfort_temp
     elif inputs.skip_setback:

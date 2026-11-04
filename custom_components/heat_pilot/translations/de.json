@@ -115,6 +115,12 @@
       },
       "night_setback": {
         "name": "Nachtabsenkung"
+      },
+      "period_paused": {
+        "name": "Heizperiode pausieren"
+      },
+      "plan_paused": {
+        "name": "Heizplan heute pausieren"
       }
     },
     "number": {
@@ -145,7 +151,8 @@
           "comfort": "Komfort",
           "setback": "Absenkung",
           "comfort_skipped": "Komfort (Absenkung übersprungen)",
-          "boost": "Boost"
+          "boost": "Boost",
+          "plan_paused": "Heizplan pausiert"
         }
       },
       "heating_period": {
@@ -167,11 +174,6 @@
     "datetime": {
       "return_at": {
         "name": "Rückkehrzeit"
-      }
-    },
-    "button": {
-      "pair_door_sensor": {
-        "name": "Türsensor anlernen"
       }
     },
     "time": {
@@ -202,6 +204,10 @@
           "description": "Tag des Monats, an dem die Heizperiode endet (einschließlich)."
         }
       }
+    },
+    "pair_door_sensor": {
+      "name": "Türsensor anlernen",
+      "description": "Öffnet das ZHA-Netzwerk für 2 Minuten, damit ein ausgefallener Türsensor sich wieder anmelden kann."
     }
   },
   "exceptions": {

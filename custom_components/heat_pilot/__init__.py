@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
 from .const import (
@@ -25,6 +26,8 @@ from .const import (
     CARD_FILENAME,
     CARD_URL_PATH,
     DOMAIN,
+    PAIRING_DURATION_SECONDS,
+    SERVICE_PAIR_DOOR_SENSOR,
     SERVICE_SET_HEATING_PERIOD,
 )
 from .coordinator import HeatPilotCoordinator
@@ -35,7 +38,6 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
-    Platform.BUTTON,
     Platform.DATETIME,
     Platform.NUMBER,
     Platform.SENSOR,
@@ -92,6 +94,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         _async_set_heating_period,
         schema=SET_HEATING_PERIOD_SCHEMA,
     )
+
+    async def _async_pair_door_sensor(call: ServiceCall) -> None:
+        """Open the ZHA network so a failed door sensor can re-join."""
+        if not hass.services.has_service("zha", "permit"):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="zha_missing"
+            )
+        await hass.services.async_call(
+            "zha", "permit", {"duration": PAIRING_DURATION_SECONDS}, blocking=True
+        )
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_PAIR_DOOR_SENSOR, _async_pair_door_sensor, schema=vol.Schema({})
+    )
     await _async_register_frontend(hass)
     return True
 
@@ -144,6 +160,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: HeatPilotConfigEntry) ->
             model="Room",
             via_device_id=hub.id,
         )
+    # The pairing button is gone (the card calls the service from an alert).
+    entity_registry = er.async_get(hass)
+    if button_id := entity_registry.async_get_entity_id(
+        "button", DOMAIN, f"{entry.entry_id}_pair_door_sensor"
+    ):
+        entity_registry.async_remove(button_id)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     notifier = HeatPilotNotifier(hass, coordinator, dict(entry.options))
     notifier.async_start()

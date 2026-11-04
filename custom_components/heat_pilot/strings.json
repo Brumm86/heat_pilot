@@ -115,6 +115,12 @@
       },
       "night_setback": {
         "name": "Night setback"
+      },
+      "period_paused": {
+        "name": "Pause heating period"
+      },
+      "plan_paused": {
+        "name": "Pause schedule today"
       }
     },
     "number": {
@@ -145,7 +151,8 @@
           "comfort": "Comfort",
           "setback": "Setback",
           "comfort_skipped": "Comfort (setback skipped)",
-          "boost": "Boost"
+          "boost": "Boost",
+          "plan_paused": "Schedule paused"
         }
       },
       "heating_period": {
@@ -167,11 +174,6 @@
     "datetime": {
       "return_at": {
         "name": "Return time"
-      }
-    },
-    "button": {
-      "pair_door_sensor": {
-        "name": "Pair door sensor"
       }
     },
     "time": {
@@ -202,6 +204,10 @@
           "description": "Day of the month the heating period ends (inclusive)."
         }
       }
+    },
+    "pair_door_sensor": {
+      "name": "Pair door sensor",
+      "description": "Opens the ZHA network for 2 minutes so a failed door sensor can re-join."
     }
   },
   "exceptions": {

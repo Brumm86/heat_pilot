@@ -42,6 +42,8 @@ def _default_global() -> dict[str, Any]:
         "period_start": list(DEFAULT_PERIOD_START),
         "period_end": list(DEFAULT_PERIOD_END),
         "period_override": False,
+        # Paused heating period: counts as inactive, beats date and override.
+        "period_paused": False,
     }
 
 
@@ -50,6 +52,9 @@ def _default_room() -> dict[str, Any]:
         "comfort": DEFAULT_COMFORT_TEMP,
         "setback": DEFAULT_SETBACK_TEMP,
         "skip_setback": False,
+        # ISO date (local) on which the schedule is paused: the room then stays
+        # in its setback phase until midnight. Older dates are simply expired.
+        "plan_paused_day": None,
         # Boost: configured duration and, while running, its end (ISO, UTC).
         "boost_minutes": DEFAULT_BOOST_MINUTES,
         "boost_until": None,

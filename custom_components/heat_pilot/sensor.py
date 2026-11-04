@@ -89,6 +89,7 @@ class HeatingPeriodSensor(HeatPilotEntity, SensorEntity):
             "end_month": g["period_end"][0],
             "end_day": g["period_end"][1],
             "override": g["period_override"],
+            "paused": g["period_paused"],
         }
 
 

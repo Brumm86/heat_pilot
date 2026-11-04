@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+- Neuer globaler Schalter „Heizperiode pausieren“: Solange er an ist, gilt die Heizperiode als inaktiv – unabhängig vom Datum und von „Heizperiode erzwingen“. Alle Thermostate werden ausgeschaltet und von Hand eingeschaltete oder verstellte Thermostate sofort wieder ausgeschaltet. Auch ein Boost heizt dann nicht: Ein laufender Boost endet mit der Heizperiode, und die Karte blendet den Boost-Schalter (und die Boost-Dauer) aus, solange die Heizperiode inaktiv ist.
+- Neuer Raumschalter „Heizplan heute pausieren“ (nur Räume mit Zeitplan): Der Raum wird sofort auf die Absenktemperatur gesetzt und bleibt bis 00:00 Uhr dort, Zeitplanwechsel werden ignoriert. Danach gilt der Zeitplan automatisch wieder. Abwesenheitsmodus, offene Tür/Fenster und Heizperiode haben weiter Vorrang, ein Boost steht darüber. Neuer Raumstatus „Heizplan pausiert“ (zählt wie Absenkung, z. B. für „Türwarnung nur in der Absenkung“).
+- Der Button „Türsensor anlernen“ ist als Entität entfallen (die Entität wird beim Start entfernt). Stattdessen gibt es den Dienst `heat_pilot.pair_door_sensor`, und die Karte zeigt den Anlern-Knopf nur noch in der Meldung „Tür-/Fenstersensor nicht erreichbar“ im Abschnitt „Aktive Meldungen“, solange der Ausfall besteht. Der Knopf in den „Allgemeinen Einstellungen“ entfällt.
+- Karte: Das Feld „Rückkehr“ erscheint nur, solange der Abwesenheitsmodus an ist.
+- Karte: Alles zum Tür-/Fenstersensor (Türwarnung in drei Varianten, Abschalten bei offener Tür/Fenster) steht je Raum in einer ausklappbaren Gruppe „Tür-/Fenstersensor“ (standardmäßig eingeklappt) und nur bei Räumen mit Tür- oder Fenstersensor.
+- Karte: Der Raumstatus neben dem Raumnamen (Komfort, Absenkung, Raum nicht belegt …) und die Anzeige „offen“ erscheinen nur noch als Symbole; der Text steht als Tooltip daran.
+- Karte: „Plan bearbeiten“ öffnet den Dialog des Zeitplan-Helfers direkt auf dem Reiter „Einstellungen“ (dort steht der Zeitplan-Editor), nicht mehr nur die Detailansicht.
+
 ## 0.11.0
 
 - Neue Nachtabsenkung für Räume mit Thermostat und ohne Zeitplan: Raumschalter „Nachtabsenkung“ (standardmäßig aus) und Raum-Uhrzeit „Uhrzeit der Nachtabsenkung“ (Standard 22:00). Ist der Schalter an, setzt Heat Pilot den Raum jeden Tag zu dieser Uhrzeit auf die Absenktemperatur, damit ein allein von Hand beheizter Raum nicht die ganze Nacht durchheizt. Es gelten die üblichen Vorrangregeln (Abwesenheitsmodus, offene Tür, Boost, Raumabwesenheit, Heizperiode). Ein ausgeschaltetes Thermostat bleibt aus; „Absenkung überspringen“ endet mit der Nachtabsenkung. Eine verpasste Absenkung (z. B. Neustart) wird nicht nachgeholt. Räume mit Zeitplan haben die Option nicht. Karte: Schalter und Uhrzeit (Tipp öffnet den Einstellungsdialog) im Raumabschnitt.

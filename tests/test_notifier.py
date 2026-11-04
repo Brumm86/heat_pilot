@@ -81,6 +81,8 @@ async def _setup(
     hass: HomeAssistant, room_data: dict | None = None, *, wants_heat: bool = True
 ) -> None:
     await hass.config.async_set_time_zone("UTC")
+    # The notifier texts follow the configured language; the tests expect German.
+    hass.config.language = "de"
     hass.states.async_set("schedule.room", "on")
     hass.states.async_set(DOOR, "off")
     hass.states.async_set(WINDOW, "off")
@@ -305,7 +307,7 @@ async def test_unavailable_thermostat_does_not_alert(
     assert not _messages(sent, "mobile_app_admin")
 
 
-async def test_pair_button_opens_zha_network(hass: HomeAssistant) -> None:
+async def test_pair_service_opens_zha_network(hass: HomeAssistant) -> None:
     await _setup(hass)
     calls: list[ServiceCall] = []
 
@@ -313,18 +315,16 @@ async def test_pair_button_opens_zha_network(hass: HomeAssistant) -> None:
         calls.append(call)
 
     hass.services.async_register("zha", "permit", _permit)
-    await hass.services.async_call(
-        "button", "press", {"entity_id": "button.heat_pilot_pair_door_sensor"}, blocking=True
-    )
+    await hass.services.async_call(DOMAIN, "pair_door_sensor", {}, blocking=True)
     assert [c.data for c in calls] == [{"duration": 120}]
+    # The old button entity is gone.
+    assert hass.states.get("button.heat_pilot_pair_door_sensor") is None
 
 
-async def test_pair_button_without_zha_raises(hass: HomeAssistant) -> None:
+async def test_pair_service_without_zha_raises(hass: HomeAssistant) -> None:
     await _setup(hass)
     with pytest.raises(ServiceValidationError):
-        await hass.services.async_call(
-            "button", "press", {"entity_id": "button.heat_pilot_pair_door_sensor"}, blocking=True
-        )
+        await hass.services.async_call(DOMAIN, "pair_door_sensor", {}, blocking=True)
 
 
 def _coordinator(hass: HomeAssistant):

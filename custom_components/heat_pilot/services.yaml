@@ -32,3 +32,5 @@ set_heating_period:
           min: 1
           max: 31
           mode: box
+
+pair_door_sensor: {}

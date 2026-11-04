@@ -21,7 +21,11 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data
     async_add_entities(
-        [AbsenceModeSwitch(coordinator), PeriodOverrideSwitch(coordinator)]
+        [
+            AbsenceModeSwitch(coordinator),
+            PeriodOverrideSwitch(coordinator),
+            PeriodPauseSwitch(coordinator),
+        ]
     )
     for room_id in coordinator.rooms:
         entities: list[SwitchEntity] = [
@@ -31,6 +35,8 @@ async def async_setup_entry(
         entities.append(SkipSetbackSwitch(coordinator, room_id))
         if coordinator.rooms[room_id].thermostats:
             entities.append(BoostSwitch(coordinator, room_id))
+        if coordinator.rooms[room_id].schedule:
+            entities.append(PlanPauseSwitch(coordinator, room_id))
         if coordinator.rooms[room_id].night_setback_available:
             entities.append(NightSetbackSwitch(coordinator, room_id))
         async_add_entities(entities, config_subentry_id=room_id)
@@ -72,6 +78,44 @@ class PeriodOverrideSwitch(HeatPilotEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_global("period_override", False)
+
+
+class PeriodPauseSwitch(HeatPilotEntity, SwitchEntity):
+    """Pause the heating period: everything stays off until switched back."""
+
+    _attr_icon = "mdi:pause-circle-outline"
+
+    def __init__(self, coordinator: HeatPilotCoordinator) -> None:
+        super().__init__(coordinator, "period_paused")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.global_state["period_paused"])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_global("period_paused", True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_global("period_paused", False)
+
+
+class PlanPauseSwitch(HeatPilotEntity, SwitchEntity):
+    """Pause the room's schedule for today: setback until midnight."""
+
+    _attr_icon = "mdi:calendar-remove-outline"
+
+    def __init__(self, coordinator: HeatPilotCoordinator, room_id: str) -> None:
+        super().__init__(coordinator, "plan_paused", room_id)
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.plan_paused(self._room_id)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_plan_paused(self._room_id, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_plan_paused(self._room_id, False)
 
 
 class RoomFeatureSwitch(HeatPilotEntity, SwitchEntity):

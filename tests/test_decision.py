@@ -213,3 +213,21 @@ def test_heating_period_within_one_year() -> None:
 )
 def test_only_definite_on_counts_as_open(state: str | None, expected: bool) -> None:
     assert sensor_is_open(state) is expected
+
+
+def test_paused_plan_holds_setback_even_in_comfort_phase() -> None:
+    result = decide(replace(BASE, plan_paused=True, schedule_on=True))
+    assert (result.hvac_mode, result.target, result.reason) == (
+        HVAC_HEAT,
+        17.0,
+        Reason.PLAN_PAUSED,
+    )
+
+
+def test_paused_plan_beats_skip_setback_but_not_boost_opening_or_period() -> None:
+    paused = replace(BASE, plan_paused=True, skip_setback=True, schedule_on=False)
+    assert decide(paused).reason is Reason.PLAN_PAUSED
+    assert decide(replace(paused, boost_active=True)).reason is Reason.BOOST
+    assert decide(replace(paused, opening_open_beyond_delay=True)).reason is Reason.OPENING
+    assert decide(replace(paused, absence_mode=True)).reason is Reason.ABSENCE_MODE
+    assert decide(replace(paused, period_active=False)).reason is Reason.OUTSIDE_PERIOD

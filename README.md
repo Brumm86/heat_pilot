@@ -11,19 +11,21 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 - Abschalten bei offener Tür oder offenem Fenster (Wartezeit einstellbar)
 - Abschalten, wenn alle zugeordneten Personen länger abwesend sind
 - Abwesenheitsmodus für das ganze Haus (Frostschutz) mit optionaler Rückkehrzeit
-- Heizperiode (feste Daten, außerhalb bleibt alles aus)
+- Heizperiode (feste Daten, außerhalb bleibt alles aus; Schalter „Heizperiode pausieren“ setzt sie aus, „erzwingen“ hält sie an – die Pause hat Vorrang)
+- „Heizplan heute pausieren“ pro Raum mit Zeitplan: Absenktemperatur bis Mitternacht, danach gilt der Zeitplan wieder
 - Maximaltemperatur-Begrenzung pro Raum
 - Nicht verfügbare Sensoren gelten als geschlossen
 - Benachrichtigungen aufs Handy (Android Companion App): Türwarnung, Lüftungserinnerung, Störungsmeldungen
 
 ## Prioritäten (höchste zuerst)
 
-1. Außerhalb der Heizperiode: Thermostate aus
+1. Außerhalb der Heizperiode (auch bei Pause): Thermostate aus, auch ein Boost heizt dann nicht; von Hand eingeschaltete Thermostate werden sofort wieder ausgeschaltet
 2. Abwesenheitsmodus: Frostschutztemperatur
 3. Tür/Fenster länger offen als die Wartezeit: aus
 4. Boost (zeitlich begrenzt, manuell gestartet): 30 °C bzw. Maximum des Thermostats, ignoriert die Maximaltemperatur-Begrenzung
 5. Alle Raum-Personen länger abwesend: aus
-6. Zeitplan: Komfort- oder Absenktemperatur
+6. Heizplan für heute pausiert: Absenktemperatur
+7. Zeitplan: Komfort- oder Absenktemperatur
 
 ## Installation (HACS)
 
@@ -60,7 +62,7 @@ Alle gesendeten Meldungen, deren Ursache noch besteht, listet die Karte oben im 
 
 ## Türsensor neu anlernen (ZHA)
 
-Der Button „Türsensor anlernen“ (Heat-Pilot-Gerät und Karte) öffnet das ZHA-Netzwerk für 2 Minuten. Anschließend die Reset-Taste am ausgefallenen Sensor etwa 3 Sekunden halten, bis die LED blinkt. ZHA erkennt den Sensor an seiner IEEE-Adresse wieder; Entitäten und Heat-Pilot-Zuordnung bleiben bestehen. Voraussetzung: ZHA ist geladen.
+Fällt ein Tür-/Fenstersensor aus, zeigt die Karte in der Meldung im Abschnitt „Aktive Meldungen“ den Knopf „Anlernmodus starten“ (Dienst `heat_pilot.pair_door_sensor`). Er öffnet das ZHA-Netzwerk für 2 Minuten. Anschließend die Reset-Taste am ausgefallenen Sensor etwa 3 Sekunden halten, bis die LED blinkt. ZHA erkennt den Sensor an seiner IEEE-Adresse wieder; Entitäten und Heat-Pilot-Zuordnung bleiben bestehen. Voraussetzung: ZHA ist geladen.
 
 ## Dienst
 

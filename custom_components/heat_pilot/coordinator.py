@@ -10,7 +10,8 @@ Heat Pilot only *acts* on events (schedule change, sensor/person change, a
 toggle, a timer, start-up, midnight). A manual change on a thermostat stays
 until the next such event. Three deliberate exceptions, all requested:
 
-* outside the heating period thermostats are forced off again,
+* outside the heating period (also while it is paused) thermostats are forced
+  off again - even a boost does not heat then,
 * while a room is shut off because a door/window stands open, a manual
   switch-on is reverted immediately, and
 * a room with the maximum-temperature limit enabled has any setpoint above
@@ -412,11 +413,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         r = self.store.room(room.room_id)
         features = r["features"]
         today = dt_util.as_local(now).date()
-        period_active = bool(g["period_override"]) or in_heating_period(
-            today, tuple(g["period_start"]), tuple(g["period_end"])
-        )
         return RoomInputs(
-            period_active=period_active,
+            period_active=self._period_active(today),
             absence_mode=bool(g["absence_mode"]),
             frost_temp=float(g["frost_temp"]),
             opening_shutdown_enabled=bool(features[FEATURE_OPENING_SHUTDOWN]),
@@ -435,6 +433,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             max_limit_enabled=bool(features[FEATURE_MAX_LIMIT]),
             max_temp=float(g["max_temp"]),
             boost_active=self.boost_active(room.room_id, now),
+            plan_paused=self.plan_paused(room.room_id, now),
         )
 
     def _compute_status(self, room: RoomConfig, now: datetime) -> RoomStatus:
@@ -453,6 +452,7 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
                 inputs.boost_active  # explicit, beats room absence
                 or (
                     not room_absent_shutdown
+                    and not inputs.plan_paused
                     and (inputs.schedule_on or inputs.skip_setback)
                 )
             )
@@ -485,8 +485,13 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             heated_today=self.store.room(room.room_id)["heated_day"]
             == dt_util.as_local(now).date().isoformat(),
             in_setback=bool(room.thermostats)
-            and self._state(room.schedule or "") != "on"
-            and not self.store.room(room.room_id)["skip_setback"]
+            and (
+                inputs.plan_paused
+                or (
+                    self._state(room.schedule or "") != "on"
+                    and not self.store.room(room.room_id)["skip_setback"]
+                )
+            )
             and not inputs.boost_active,
             in_comfort=in_comfort,
         )
@@ -554,6 +559,11 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             return
         async with self._lock:
             now = dt_util.utcnow()
+            if self.boost_until(room_id) is not None and not self._period_active(
+                dt_util.as_local(now).date()
+            ):
+                # No heating outside the heating period, not even a boost.
+                self._clear_boost(room_id)
             self._refresh_timers(room, now)
             self._note_heating(room, now)
             status = self._compute_status(room, now)
@@ -731,6 +741,27 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         self.store.schedule_save()
         await self.async_evaluate_room(room_id)
 
+    # -------------------------------------------------------------- plan pause
+
+    def plan_paused(self, room_id: str, now: datetime | None = None) -> bool:
+        """Whether the room's schedule is paused today (ends at midnight)."""
+        room = self.rooms.get(room_id)
+        if room is None or room.schedule is None:
+            return False
+        day = self.store.room(room_id)["plan_paused_day"]
+        return day == dt_util.as_local(now or dt_util.utcnow()).date().isoformat()
+
+    async def async_set_plan_paused(self, room_id: str, paused: bool) -> None:
+        """Pause the room's schedule for the rest of today (room -> setback)."""
+        room = self.rooms.get(room_id)
+        if room is None or room.schedule is None:
+            return
+        self.store.room(room_id)["plan_paused_day"] = (
+            dt_util.as_local(dt_util.utcnow()).date().isoformat() if paused else None
+        )
+        self.store.schedule_save()
+        await self.async_evaluate_room(room_id)
+
     # ------------------------------------------------------------ night setback
 
     def night_setback_time(self, room_id: str) -> dt_time:
@@ -894,9 +925,14 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
     def global_state(self) -> dict[str, Any]:
         return self.store.global_state
 
-    def period_active_today(self) -> bool:
+    def _period_active(self, today: date) -> bool:
+        """The heating period is active; a pause beats the dates and the override."""
         g = self.store.global_state
-        today: date = dt_util.now().date()
+        if g["period_paused"]:
+            return False
         return bool(g["period_override"]) or in_heating_period(
             today, tuple(g["period_start"]), tuple(g["period_end"])
         )
+
+    def period_active_today(self) -> bool:
+        return self._period_active(dt_util.now().date())

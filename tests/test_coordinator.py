@@ -540,3 +540,114 @@ async def test_night_setback_is_only_offered_to_rooms_without_schedule(
     await _setup(hass)  # the room has a schedule
     assert hass.states.get("switch.room_night_setback") is None
     assert hass.states.get("time.room_night_setback_time") is None
+
+
+def _switch_id(hass: HomeAssistant, key: str) -> str:
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    for entry in registry.entities.values():
+        if entry.platform == DOMAIN and entry.translation_key == key:
+            return entry.entity_id
+    raise AssertionError(key)
+
+
+async def test_paused_heating_period_forces_off_and_ignores_manual_changes(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    assert _temps(climate_calls)[-1] == 21.0
+    climate_calls.clear()
+
+    pause = _switch_id(hass, "period_paused")
+    await hass.services.async_call("switch", "turn_on", {"entity_id": pause}, blocking=True)
+    await hass.async_block_till_done()
+    assert _modes(climate_calls)[-1] == "off"
+    assert hass.states.get(_switch_id(hass, "status")).state == "outside_period"
+    climate_calls.clear()
+
+    # A manual switch-on is reverted again.
+    _set_thermostat(hass, "heat", 22.0)
+    await hass.async_block_till_done()
+    assert _modes(climate_calls)[-1] == "off"
+
+    # The pause beats "force heating period".
+    override = _switch_id(hass, "period_override")
+    await hass.services.async_call("switch", "turn_on", {"entity_id": override}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(_switch_id(hass, "heating_period")).state == "inactive"
+
+    # Switching the pause off restores comfort.
+    climate_calls.clear()
+    await hass.services.async_call("switch", "turn_off", {"entity_id": pause}, blocking=True)
+    await hass.async_block_till_done()
+    assert _temps(climate_calls)[-1] == 21.0
+
+
+async def test_boost_does_not_heat_outside_the_heating_period_and_ends(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    boost = _switch_id(hass, "boost")
+    await hass.services.async_call("switch", "turn_on", {"entity_id": boost}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(boost).state == "on"
+
+    pause = _switch_id(hass, "period_paused")
+    await hass.services.async_call("switch", "turn_on", {"entity_id": pause}, blocking=True)
+    await hass.async_block_till_done()
+    assert _modes(climate_calls)[-1] == "off"
+    assert hass.states.get(boost).state == "off"  # the boost ended with the period
+
+    # A new boost does not turn the heating on while the period is paused.
+    climate_calls.clear()
+    await hass.services.async_call("switch", "turn_on", {"entity_id": boost}, blocking=True)
+    await hass.async_block_till_done()
+    assert "heat" not in _modes(climate_calls)
+    assert hass.states.get(boost).state == "off"
+
+
+async def test_plan_pause_holds_setback_until_midnight(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-10 12:00:00+00:00")
+    await _setup(hass)
+    assert _temps(climate_calls)[-1] == 21.0
+    climate_calls.clear()
+
+    pause = _switch_id(hass, "plan_paused")
+    await hass.services.async_call("switch", "turn_on", {"entity_id": pause}, blocking=True)
+    await hass.async_block_till_done()
+    assert _temps(climate_calls)[-1] == 17.0
+    assert hass.states.get(_switch_id(hass, "status")).state == "plan_paused"
+
+    # Schedule events are ignored: the room stays at setback.
+    climate_calls.clear()
+    hass.states.async_set(SCHEDULE, "off")
+    await hass.async_block_till_done()
+    hass.states.async_set(SCHEDULE, "on")
+    await hass.async_block_till_done()
+    assert 21.0 not in _temps(climate_calls)
+
+    # At the next local midnight the schedule is back in charge.
+    midnight = dt_util.start_of_local_day(dt_util.now() + timedelta(days=1))
+    freezer.move_to(midnight + timedelta(seconds=5))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get(pause).state == "off"
+    assert _temps(climate_calls)[-1] == 21.0
+
+
+async def test_plan_pause_only_for_rooms_with_a_schedule(
+    hass: HomeAssistant, climate_calls: list[ServiceCall]
+) -> None:
+    await _setup(hass, NO_SCHEDULE_DATA)
+    from homeassistant.helpers import entity_registry as er
+
+    assert not [
+        e
+        for e in er.async_get(hass).entities.values()
+        if e.platform == DOMAIN and e.translation_key == "plan_paused"
+    ]

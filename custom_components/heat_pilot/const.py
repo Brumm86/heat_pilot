@@ -72,6 +72,7 @@ FEATURES_DEFAULT_OFF = (
 )
 
 SERVICE_SET_HEATING_PERIOD = "set_heating_period"
+SERVICE_PAIR_DOOR_SENSOR = "pair_door_sensor"
 ATTR_START_MONTH = "start_month"
 ATTR_START_DAY = "start_day"
 ATTR_END_MONTH = "end_month"

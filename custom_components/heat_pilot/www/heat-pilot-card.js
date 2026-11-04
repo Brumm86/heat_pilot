@@ -33,7 +33,9 @@
       end_day: "Endtag",
       end_month: "Endmonat",
       period_override: "Heizperiode erzwingen",
-      pair_door_sensor: "Türsensor neu anlernen",
+      period_paused: "Heizperiode pausieren",
+      plan_paused: "Heizplan heute pausieren",
+      door_group: "Tür-/Fenstersensor",
       pair_start: "Anlernmodus starten",
       pair_started: "Anlernmodus aktiv (2 Min.)",
       frost_temp: "Frostschutz",
@@ -80,7 +82,9 @@
       end_day: "End day",
       end_month: "End month",
       period_override: "Force heating period",
-      pair_door_sensor: "Re-pair door sensor",
+      period_paused: "Pause heating period",
+      plan_paused: "Pause schedule today",
+      door_group: "Door/window sensor",
       pair_start: "Start pairing mode",
       pair_started: "Pairing mode active (2 min)",
       frost_temp: "Frost protection",
@@ -113,14 +117,33 @@
 
   var ROOM_SWITCHES = [
     "skip_setback",
-    "door_warning",
-    "door_warning_setback_only",
-    "door_warning_heating_only",
-    "opening_shutdown",
+    "plan_paused",
     "absence_shutdown",
     "max_limit",
     "night_setback",
   ];
+
+  // Everything that belongs to a door/window sensor; shown in a collapsible
+  // group, only for rooms that have such a sensor (they own the "opening" entity).
+  var DOOR_SWITCHES = [
+    "door_warning",
+    "door_warning_setback_only",
+    "door_warning_heating_only",
+    "opening_shutdown",
+  ];
+
+  // Room status shown as an icon only (the text is the tooltip).
+  var STATUS_ICONS = {
+    outside_period: "mdi:radiator-off",
+    absence_mode: "mdi:home-export-outline",
+    opening: "mdi:door-open",
+    room_absent: "mdi:account-off-outline",
+    comfort: "mdi:white-balance-sunny",
+    setback: "mdi:weather-night",
+    comfort_skipped: "mdi:weather-night-off",
+    boost: "mdi:fire",
+    plan_paused: "mdi:calendar-remove-outline",
+  };
 
   function esc(value) {
     return String(value === undefined || value === null ? "" : value)
@@ -183,7 +206,11 @@
     ".alert{padding:6px 0;border-top:1px solid var(--divider-color)}" +
     ".alert:first-of-type{border-top:none}" +
     ".alert b{display:block}" +
-    ".empty{padding:16px 0;color:var(--secondary-text-color)}";
+    ".empty{padding:16px 0;color:var(--secondary-text-color)}" +
+    ".icon{display:inline-flex;align-items:center;--mdc-icon-size:22px;color:var(--primary-color)}" +
+    ".icon.warn{color:var(--error-color,#e53935)}" +
+    ".subsec{margin-top:4px;padding-left:12px;border-left:2px solid var(--divider-color)}" +
+    ".subsec .head{min-height:36px}";
 
   class HeatPilotCard extends HTMLElement {
     constructor() {
@@ -405,8 +432,10 @@
         }
       }
       html += this._toggle(g.period_override, this._t("period_override"));
+      html += this._toggle(g.period_paused, this._t("period_paused"));
       html += this._toggle(g.absence_mode, this._t("absence"));
-      var ret = this._state(g.return_at);
+      var absence = this._state(g.absence_mode);
+      var ret = absence && absence.state === "on" ? this._state(g.return_at) : null;
       if (ret) {
         var value = ret.state && ret.state !== "unknown" && ret.state !== "unavailable"
           ? ret.state.replace(" ", "T").slice(0, 16) : "";
@@ -417,12 +446,6 @@
       }
       html += this._stepper(g.frost_temp, this._t("frost_temp"));
       html += this._stepper(g.max_temp, this._t("max_temp"));
-      if (this._state(g.pair_door_sensor)) {
-        html +=
-          '<div class="row"><span>' + esc(this._t("pair_door_sensor")) + "</span>" +
-          '<button class="link" data-act="press" data-ent="' + esc(g.pair_door_sensor) + '">' +
-          esc(this._pairing ? this._t("pair_started") : this._t("pair_start")) + "</button></div>";
-      }
       return html;
     }
 
@@ -438,7 +461,13 @@
       alerts.forEach(function (a) {
         html +=
           '<div class="alert"><b>' + esc(a.title) + "</b>" + esc(a.message) +
-          ' <span class="sub">(' + esc(self._t("since")) + " " + esc(self._fmtClock(a.since)) + ")</span></div>";
+          ' <span class="sub">(' + esc(self._t("since")) + " " + esc(self._fmtClock(a.since)) + ")</span>";
+        if (a.kind === "unavailable") {
+          html +=
+            '<div class="actions"><button class="link" data-act="pair">' +
+            esc(self._pairing ? self._t("pair_started") : self._t("pair_start")) + "</button></div>";
+        }
+        html += "</div>";
       });
       return html + "</div>";
     }
@@ -472,7 +501,7 @@
       return html + "</div>";
     }
 
-    _renderRoom(room) {
+    _renderRoom(room, periodActive) {
       var e = room.ents;
       var hass = this._hass;
       var status = this._state(e.status);
@@ -481,10 +510,13 @@
       var opening = this._state(e.opening);
       var chips = "";
       if (opening && opening.state === "on") {
-        chips += '<span class="chip warn">' + esc(this._t("open")) + "</span> ";
+        chips += '<span class="icon warn" title="' + esc(this._t("open")) +
+          '"><ha-icon icon="mdi:door-open"></ha-icon></span> ';
       }
       if (status) {
-        chips += '<span class="chip on">' + esc(this._display(status)) + "</span>";
+        var icon = STATUS_ICONS[status.state] || "mdi:information-outline";
+        chips += '<span class="icon" title="' + esc(this._display(status)) +
+          '"><ha-icon icon="' + esc(icon) + '"></ha-icon></span>';
       }
       var html = '<div class="sec">' + this._head(room.id, "<h3>" + esc(room.name) + "</h3>", chips);
       if (!this._open[room.id]) {
@@ -505,7 +537,7 @@
         html += this._stepper(e.comfort, this._t("comfort"));
         html += this._stepper(e.setback, this._t("setback"));
       }
-      var boost = this._state(e.boost);
+      var boost = periodActive ? this._state(e.boost) : null;
       if (boost) {
         var until = boost.state === "on" && boost.attributes.ends_at
           ? this._fmtClock(boost.attributes.ends_at) : "";
@@ -521,6 +553,23 @@
           html += self._toggle(e[key], self._t(key));
         }
       });
+      if (e.opening) {
+        var doorKey = room.id + ":door";
+        var doorHtml = "";
+        DOOR_SWITCHES.forEach(function (key) {
+          if (e[key]) {
+            doorHtml += self._toggle(e[key], self._t(key));
+          }
+        });
+        if (doorHtml) {
+          html += '<div class="subsec">' +
+            this._head(doorKey, "<span>" + esc(this._t("door_group")) + "</span>", "");
+          if (this._open[doorKey]) {
+            html += '<div class="body">' + doorHtml + "</div>";
+          }
+          html += "</div>";
+        }
+      }
       var nightTime = this._state(e.night_setback_time);
       if (nightTime && nightTime.state !== "unavailable" && nightTime.state !== "unknown") {
         html +=
@@ -531,7 +580,7 @@
       if (attrs.schedule && hass.states[attrs.schedule]) {
         html +=
           '<div class="actions"><button class="link" data-act="plan" data-ent="' +
-          esc(attrs.schedule) + '">' + esc(this._t("edit_plan")) + "</button></div>";
+          esc(attrs.schedule) + '" data-view="settings">' + esc(this._t("edit_plan")) + "</button></div>";
       }
       return html + "</div></div>";
     }
@@ -567,6 +616,8 @@
       } else {
         html += this._renderAlerts(data.global.active_alerts);
         html += this._renderGlobalSection(data.global);
+        var periodState = this._state(data.global.heating_period);
+        var periodActive = !!periodState && periodState.state === "active";
         var ids = Object.keys(data.rooms).sort(function (a, b) {
           return String(data.rooms[a].name).localeCompare(String(data.rooms[b].name));
         });
@@ -574,7 +625,7 @@
           html += '<div class="empty">' + esc(this._t("no_rooms")) + "</div>";
         }
         for (var i = 0; i < ids.length; i++) {
-          html += this._renderRoom(data.rooms[ids[i]]);
+          html += this._renderRoom(data.rooms[ids[i]], periodActive);
         }
       }
       html += "</ha-card>";
@@ -665,9 +716,9 @@
         if (min !== null) value = Math.max(min, value);
         if (max !== null) value = Math.min(max, value);
         this._call("number", "set_value", { entity_id: ent, value: Math.round(value * 100) / 100 });
-      } else if (act === "press") {
+      } else if (act === "pair") {
         var self = this;
-        this._call("button", "press", { entity_id: ent }).then(function () {
+        this._call("heat_pilot", "pair_door_sensor", {}).then(function () {
           self._pairing = true;
           self._render();
           setTimeout(function () {
@@ -680,9 +731,12 @@
         this._open[key] = !this._open[key];
         this._render();
       } else if (act === "plan") {
+        // For the schedule helper the dialog opens on its settings tab, which
+        // holds the schedule editor (instead of the plain detail view).
+        var view = node.getAttribute("data-view");
         this.dispatchEvent(
           new CustomEvent("hass-more-info", {
-            detail: { entityId: ent },
+            detail: view ? { entityId: ent, view: view } : { entityId: ent },
             bubbles: true,
             composed: true,
           })
