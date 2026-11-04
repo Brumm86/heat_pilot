@@ -52,6 +52,8 @@
       boost: "Boost",
       boost_until: "bis",
       boost_minutes: "Boost-Dauer",
+      night_setback: "Nachtabsenkung",
+      night_setback_time: "Nachtabsenkung um",
       edit_plan: "Plan bearbeiten",
       next_change: "Nächster Wechsel",
       open: "offen",
@@ -97,6 +99,8 @@
       boost: "Boost",
       boost_until: "until",
       boost_minutes: "Boost duration",
+      night_setback: "Night setback",
+      night_setback_time: "Night setback at",
       edit_plan: "Edit schedule",
       next_change: "Next change",
       open: "open",
@@ -115,6 +119,7 @@
     "opening_shutdown",
     "absence_shutdown",
     "max_limit",
+    "night_setback",
   ];
 
   function esc(value) {
@@ -516,6 +521,13 @@
           html += self._toggle(e[key], self._t(key));
         }
       });
+      var nightTime = this._state(e.night_setback_time);
+      if (nightTime && nightTime.state !== "unavailable" && nightTime.state !== "unknown") {
+        html +=
+          '<div class="row"><span>' + esc(this._t("night_setback_time")) + "</span>" +
+          '<button class="link" data-act="plan" data-ent="' + esc(e.night_setback_time) + '">' +
+          esc(String(nightTime.state).slice(0, 5)) + "</button></div>";
+      }
       if (attrs.schedule && hass.states[attrs.schedule]) {
         html +=
           '<div class="actions"><button class="link" data-act="plan" data-ent="' +

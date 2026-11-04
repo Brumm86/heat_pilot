@@ -112,6 +112,9 @@
       },
       "boost": {
         "name": "Boost"
+      },
+      "night_setback": {
+        "name": "Night setback"
       }
     },
     "number": {
@@ -169,6 +172,11 @@
     "button": {
       "pair_door_sensor": {
         "name": "Pair door sensor"
+      }
+    },
+    "time": {
+      "night_setback_time": {
+        "name": "Night setback time"
       }
     }
   },

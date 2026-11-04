@@ -28,6 +28,9 @@ DEFAULT_COMFORT_TEMP = 21.0
 DEFAULT_SETBACK_TEMP = 17.0
 DEFAULT_FROST_TEMP = 7.0
 DEFAULT_MAX_TEMP = 24.0
+# Night setback for rooms without schedule: the daily time at which the room
+# is lowered to its setback temperature (stored as "HH:MM").
+DEFAULT_NIGHT_SETBACK_TIME = "22:00"
 DEFAULT_PERIOD_START = (10, 1)  # 1 October
 DEFAULT_PERIOD_END = (4, 30)  # 30 April
 

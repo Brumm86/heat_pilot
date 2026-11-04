@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+
+- Neue Nachtabsenkung für Räume mit Thermostat und ohne Zeitplan: Raumschalter „Nachtabsenkung“ (standardmäßig aus) und Raum-Uhrzeit „Uhrzeit der Nachtabsenkung“ (Standard 22:00). Ist der Schalter an, setzt Heat Pilot den Raum jeden Tag zu dieser Uhrzeit auf die Absenktemperatur, damit ein allein von Hand beheizter Raum nicht die ganze Nacht durchheizt. Es gelten die üblichen Vorrangregeln (Abwesenheitsmodus, offene Tür, Boost, Raumabwesenheit, Heizperiode). Ein ausgeschaltetes Thermostat bleibt aus; „Absenkung überspringen“ endet mit der Nachtabsenkung. Eine verpasste Absenkung (z. B. Neustart) wird nicht nachgeholt. Räume mit Zeitplan haben die Option nicht. Karte: Schalter und Uhrzeit (Tipp öffnet den Einstellungsdialog) im Raumabschnitt.
+
 ## 0.10.0
 
 - Tür-/Fenstersensor-Ereignisse lassen den Sollwert jetzt unangetastet: Solange die Wartezeit läuft (auch bei einem flatternden Sensor), tut Heat Pilot nichts; die Abschaltung schaltet die Thermostate nur aus; nach dem Schließen werden sie wieder auf Heizen geschaltet und behalten ihren Sollwert (z. B. eine Handeinstellung). Nur wenn sich das Planziel des Raums zwischen Abschaltung und Wiedereinschalten geändert hat (Komfort/Absenkung, Abwesenheitsmodus, Boost-Ende), wird das neue Planziel gesetzt. Vorher wurde bei jedem Türereignis der Sollwert auf das Planziel zurückgesetzt.

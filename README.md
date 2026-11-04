@@ -6,6 +6,7 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 - Zeitplangesteuerte Temperatur mit Absenkung (vorhandener `schedule`-Helfer: an = Komfort, aus = Absenkung)
 - „Absenkung überspringen“ pro Raum (einmalig, endet automatisch zum nächsten Komfortbeginn)
+- „Nachtabsenkung“ für Räume ohne Zeitplan: Zu einer einstellbaren Uhrzeit (Standard 22:00) wird der Raum täglich auf die Absenktemperatur gesetzt, damit ein von Hand beheizter Raum nicht die ganze Nacht durchheizt (Raumschalter, standardmäßig aus). Ein ausgeschaltetes Thermostat bleibt aus; verpasste Absenkungen werden nicht nachgeholt
 - „Boost“ pro Raum: volle Heizleistung für eine einstellbare Zeit (Standard 30 Minuten), danach zurück zum Zeitplan
 - Abschalten bei offener Tür oder offenem Fenster (Wartezeit einstellbar)
 - Abschalten, wenn alle zugeordneten Personen länger abwesend sind

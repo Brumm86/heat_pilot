@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
@@ -70,7 +70,17 @@ def _set_thermostat(
     hass.states.async_set(THERMOSTAT, mode, attrs)
 
 
-async def _setup(hass: HomeAssistant) -> MockConfigEntry:
+NO_SCHEDULE_DATA = {k: v for k, v in ROOM_DATA.items() if k != "schedule"}
+
+
+def _local(hhmm: str) -> datetime:
+    """A moment on 10 Nov 2026 at ``hhmm`` in Home Assistant's time zone."""
+    return datetime.fromisoformat(f"2026-11-10T{hhmm}:00").replace(
+        tzinfo=dt_util.get_default_time_zone()
+    )
+
+
+async def _setup(hass: HomeAssistant, room_data: dict | None = None) -> MockConfigEntry:
     hass.states.async_set(SCHEDULE, "on")
     hass.states.async_set(DOOR, "off")
     hass.states.async_set(PERSON, "home")
@@ -81,7 +91,7 @@ async def _setup(hass: HomeAssistant) -> MockConfigEntry:
         title="Heat Pilot",
         subentries_data=[
             ConfigSubentryData(
-                data=ROOM_DATA,
+                data=room_data or ROOM_DATA,
                 subentry_type=SUBENTRY_ROOM,
                 title="Room",
                 unique_id=None,
@@ -444,3 +454,89 @@ async def test_card_is_registered_and_status_exposes_schedule(
     status = hass.states.get("sensor.room_status")
     assert status.attributes["schedule"] == SCHEDULE
     assert status.attributes["thermostats"] == [THERMOSTAT]
+
+
+async def test_night_setback_lowers_a_manually_heated_room_at_the_set_time(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(_local("21:00"))
+    entry = await _setup(hass, NO_SCHEDULE_DATA)
+    coordinator = entry.runtime_data
+    room_id = next(iter(entry.subentries))
+    assert hass.states.get("switch.room_night_setback").state == "off"
+    await coordinator.async_set_night_setback(room_id, enabled=True)
+
+    _set_thermostat(hass, "heat", 23.0)  # heated by hand in the evening
+    await hass.async_block_till_done()
+    climate_calls.clear()
+
+    await _advance(hass, freezer, minutes=30)
+    assert climate_calls == []  # switching the option on does not lower the room
+    await _advance(hass, freezer, minutes=31)
+    assert _temps(climate_calls) == [17.0]
+    assert hass.states.get(THERMOSTAT).attributes["temperature"] == 17.0
+
+
+async def test_night_setback_does_nothing_while_the_option_is_off(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(_local("21:00"))
+    await _setup(hass, NO_SCHEDULE_DATA)
+    _set_thermostat(hass, "heat", 23.0)
+    await hass.async_block_till_done()
+    climate_calls.clear()
+
+    await _advance(hass, freezer, hours=2)
+    assert climate_calls == []
+
+
+async def test_night_setback_never_switches_a_thermostat_on(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(_local("21:00"))
+    entry = await _setup(hass, NO_SCHEDULE_DATA)
+    room_id = next(iter(entry.subentries))
+    await entry.runtime_data.async_set_night_setback(room_id, enabled=True)
+    _set_thermostat(hass, "off", 23.0)
+    await hass.async_block_till_done()
+    climate_calls.clear()
+
+    await _advance(hass, freezer, hours=2)
+    assert climate_calls == []
+
+
+async def test_night_setback_time_can_be_changed_and_ends_skip_setback(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(_local("21:00"))
+    entry = await _setup(hass, NO_SCHEDULE_DATA)
+    coordinator = entry.runtime_data
+    room_id = next(iter(entry.subentries))
+    await coordinator.async_set_night_setback(room_id, enabled=True)
+    await hass.services.async_call(
+        "time",
+        "set_value",
+        {"entity_id": "time.room_night_setback_time", "time": "23:30:00"},
+        blocking=True,
+    )
+    assert coordinator.night_setback_time(room_id) == time(23, 30)
+    assert coordinator.room_state(room_id)["night_setback_time"] == "23:30"
+
+    await coordinator.async_set_room_value(room_id, "skip_setback", True)
+    assert _temps(climate_calls)[-1] == 21.0  # no schedule: skipping means comfort
+    climate_calls.clear()
+
+    await _advance(hass, freezer, hours=1, minutes=5)  # 22:05, old time passed
+    assert climate_calls == []
+    await _advance(hass, freezer, hours=1, minutes=30)  # 23:35
+    assert _temps(climate_calls) == [17.0]
+    assert coordinator.room_state(room_id)["skip_setback"] is False
+
+
+async def test_night_setback_is_only_offered_to_rooms_without_schedule(
+    hass: HomeAssistant, climate_calls: list[ServiceCall], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(_local("21:00"))
+    await _setup(hass)  # the room has a schedule
+    assert hass.states.get("switch.room_night_setback") is None
+    assert hass.states.get("time.room_night_setback_time") is None

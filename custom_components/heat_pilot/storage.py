@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_BOOST_MINUTES,
     DEFAULT_COMFORT_TEMP,
     DEFAULT_FROST_TEMP,
+    DEFAULT_NIGHT_SETBACK_TIME,
     DEFAULT_MAX_TEMP,
     DEFAULT_PERIOD_END,
     DEFAULT_PERIOD_START,
@@ -56,6 +57,9 @@ def _default_room() -> dict[str, Any]:
         # ISO date of the last day on which the room asked for heat; used to
         # decide whether a room was "heated today".
         "heated_day": None,
+        # Night setback (rooms without schedule only): switch and daily time.
+        "night_setback": False,
+        "night_setback_time": DEFAULT_NIGHT_SETBACK_TIME,
         # While a door/window shutdown lasts: [hvac_mode, target] the room's plan
         # had when it started. Decides whether the setpoint is set on release.
         "opening_plan": None,

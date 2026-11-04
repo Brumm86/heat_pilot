@@ -112,6 +112,9 @@
       },
       "boost": {
         "name": "Boost"
+      },
+      "night_setback": {
+        "name": "Nachtabsenkung"
       }
     },
     "number": {
@@ -169,6 +172,11 @@
     "button": {
       "pair_door_sensor": {
         "name": "Türsensor anlernen"
+      }
+    },
+    "time": {
+      "night_setback_time": {
+        "name": "Uhrzeit der Nachtabsenkung"
       }
     }
   },

@@ -31,6 +31,8 @@ async def async_setup_entry(
         entities.append(SkipSetbackSwitch(coordinator, room_id))
         if coordinator.rooms[room_id].thermostats:
             entities.append(BoostSwitch(coordinator, room_id))
+        if coordinator.rooms[room_id].night_setback_available:
+            entities.append(NightSetbackSwitch(coordinator, room_id))
         async_add_entities(entities, config_subentry_id=room_id)
 
 
@@ -135,3 +137,22 @@ class SkipSetbackSwitch(HeatPilotEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_room_value(self._room_id, "skip_setback", False)
+
+
+class NightSetbackSwitch(HeatPilotEntity, SwitchEntity):
+    """Lower a room without schedule to its setback temperature every night."""
+
+    _attr_icon = "mdi:weather-night"
+
+    def __init__(self, coordinator: HeatPilotCoordinator, room_id: str) -> None:
+        super().__init__(coordinator, "night_setback", room_id)
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.room_state(self._room_id)["night_setback"])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_night_setback(self._room_id, enabled=True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.async_set_night_setback(self._room_id, enabled=False)
