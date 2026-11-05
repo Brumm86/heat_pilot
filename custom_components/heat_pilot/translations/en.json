@@ -44,15 +44,15 @@
           "description": "Define a room with its thermostats, schedule and optional door/window sensors and persons.",
           "data": {
             "name": "Room name",
-            "thermostats": "Thermostats (leave empty if the room is not heated by thermostats)",
-            "schedule": "Schedule (on = comfort, off = setback; only needed with thermostats)",
+            "heating_type": "Heating",
+            "thermostats": "Thermostats (not needed for \"Other\")",
+            "schedule": "Schedule (on = comfort, off = setback; not needed for \"Other\")",
             "door_sensors": "Door sensors",
             "window_sensors": "Window sensors",
             "persons": "Persons (room is shut off when all are away)",
             "notify_persons": "Persons whose phones get door/ventilation messages (none = all)",
             "open_delay_minutes": "Minutes open before shutting off",
-            "absence_delay_minutes": "Minutes away before shutting off",
-            "external_heating": "Room is heated differently (e.g. underfloor heating): door warning even without heating via thermostat"
+            "absence_delay_minutes": "Minutes away before shutting off"
           }
         },
         "reconfigure": {
@@ -60,15 +60,15 @@
           "description": "Change the room's thermostats, schedule, sensors, persons and delays.",
           "data": {
             "name": "Room name",
-            "thermostats": "Thermostats (leave empty if the room is not heated by thermostats)",
-            "schedule": "Schedule (on = comfort, off = setback; only needed with thermostats)",
+            "heating_type": "Heating",
+            "thermostats": "Thermostats (not needed for \"Other\")",
+            "schedule": "Schedule (on = comfort, off = setback; not needed for \"Other\")",
             "door_sensors": "Door sensors",
             "window_sensors": "Window sensors",
             "persons": "Persons (room is shut off when all are away)",
             "notify_persons": "Persons whose phones get door/ventilation messages (none = all)",
             "open_delay_minutes": "Minutes open before shutting off",
-            "absence_delay_minutes": "Minutes away before shutting off",
-            "external_heating": "Room is heated differently (e.g. underfloor heating): door warning even without heating via thermostat"
+            "absence_delay_minutes": "Minutes away before shutting off"
           }
         }
       },
@@ -116,7 +116,7 @@
         "name": "Boost"
       },
       "night_setback": {
-        "name": "Night setback"
+        "name": "Forced night setback"
       },
       "period_paused": {
         "name": "Pause heating period"
@@ -140,6 +140,9 @@
       },
       "boost_minutes": {
         "name": "Boost duration"
+      },
+      "setpoint": {
+        "name": "Target temperature"
       }
     },
     "sensor": {
@@ -154,7 +157,8 @@
           "setback": "Setback",
           "comfort_skipped": "Comfort (setback skipped)",
           "boost": "Boost",
-          "plan_paused": "Schedule paused"
+          "plan_paused": "Schedule paused",
+          "night_setback": "Night setback"
         }
       },
       "heating_period": {
@@ -166,6 +170,9 @@
       },
       "active_alerts": {
         "name": "Active alerts"
+      },
+      "next_night_setback": {
+        "name": "Next setback"
       }
     },
     "binary_sensor": {
@@ -179,8 +186,22 @@
       }
     },
     "time": {
-      "night_setback_time": {
-        "name": "Night setback time"
+      "night_weekday_start": {
+        "name": "Night Sun–Thu: start"
+      },
+      "night_weekday_end": {
+        "name": "Night Sun–Thu: end"
+      },
+      "night_weekend_start": {
+        "name": "Night Fri+Sat: start"
+      },
+      "night_weekend_end": {
+        "name": "Night Fri+Sat: end"
+      }
+    },
+    "button": {
+      "night_setback_later": {
+        "name": "Setback one hour later"
       }
     }
   },
@@ -221,6 +242,15 @@
     },
     "zha_missing": {
       "message": "The ZHA integration is not loaded; pairing mode cannot be started."
+    }
+  },
+  "selector": {
+    "heating_type": {
+      "options": {
+        "thermostat": "Thermostat",
+        "external": "Other (not controlled by Home Assistant, e.g. underfloor heating)",
+        "combined": "Combined (thermostat and other)"
+      }
     }
   }
 }

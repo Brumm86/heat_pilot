@@ -75,7 +75,7 @@ async def test_room_requires_thermostat(hass: HomeAssistant) -> None:
     assert result["errors"] == {"thermostats": "no_thermostat"}
 
 
-async def test_room_without_thermostat_needs_external_heating(
+async def test_room_without_thermostat_needs_heating_type_external(
     hass: HomeAssistant,
 ) -> None:
     entry = await _setup_entry(hass)
@@ -87,15 +87,35 @@ async def test_room_without_thermostat_needs_external_heating(
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"], base
     )
-    assert result["errors"] == {"thermostats": "no_thermostat"}
+    assert result["errors"] == {
+        "thermostats": "no_thermostat",
+        "schedule": "schedule_required",
+    }
 
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {**base, "external_heating": True}
+        result["flow_id"], {**base, "heating_type": "external"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     (subentry,) = entry.subentries.values()
-    assert subentry.data["external_heating"] is True
+    assert subentry.data["heating_type"] == "external"
     assert subentry.data["thermostats"] == []
+    assert "schedule" not in subentry.data
+
+
+async def test_external_heating_drops_thermostats_and_schedule(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_entry(hass)
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_ROOM), context={"source": "user"}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**ROOM_INPUT, "heating_type": "external"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    (subentry,) = entry.subentries.values()
+    assert subentry.data["thermostats"] == []
+    assert "schedule" not in subentry.data
 
 
 async def test_thermostat_requires_schedule(hass: HomeAssistant) -> None:

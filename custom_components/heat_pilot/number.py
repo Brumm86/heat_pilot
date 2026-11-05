@@ -8,8 +8,9 @@ from homeassistant.components.number import (
     NumberMode,
 )
 from homeassistant.const import UnitOfTemperature, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 
 from . import HeatPilotConfigEntry
 from .const import (
@@ -36,13 +37,17 @@ async def async_setup_entry(
         ]
     )
     for room_id, room in coordinator.rooms.items():
-        entities: list[NumberEntity] = [
-            RoomTemperatureNumber(coordinator, room_id, "comfort"),
-            RoomTemperatureNumber(coordinator, room_id, "setback"),
-        ]
-        if room.thermostats:
-            entities.append(BoostDurationNumber(coordinator, room_id))
-        async_add_entities(entities, config_subentry_id=room_id)
+        if not room.thermostats:
+            continue  # heated outside Home Assistant: nothing to set
+        async_add_entities(
+            [
+                RoomTemperatureNumber(coordinator, room_id, "comfort"),
+                RoomTemperatureNumber(coordinator, room_id, "setback"),
+                BoostDurationNumber(coordinator, room_id),
+                RoomSetpointNumber(coordinator, room_id),
+            ],
+            config_subentry_id=room_id,
+        )
 
 
 class _TemperatureNumber(HeatPilotEntity, NumberEntity):
@@ -118,3 +123,49 @@ class RoomTemperatureNumber(_TemperatureNumber):
         await self.coordinator.async_set_room_value(
             self._room_id, self._key, float(value)
         )
+
+
+class RoomSetpointNumber(_TemperatureNumber):
+    """Slider for the setpoint of all the room's thermostats.
+
+    Shows the mean setpoint of the thermostats that report one; setting it
+    sets every thermostat of the room (switching switched-off ones to heat).
+    Heat Pilot's standing rules (maximum, open door, night setback) still apply.
+    """
+
+    _attr_native_min_value = MIN_TEMP
+    _attr_native_max_value = MAX_TEMP
+    _attr_mode = NumberMode.SLIDER
+
+    def __init__(self, coordinator: HeatPilotCoordinator, room_id: str) -> None:
+        super().__init__(coordinator, "setpoint", room_id)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        thermostats = list(self.coordinator.rooms[self._room_id].thermostats)
+
+        @callback
+        def _changed(_event: Event) -> None:
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_state_change_event(self.hass, thermostats, _changed)
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        values: list[float] = []
+        for entity_id in self.coordinator.rooms[self._room_id].thermostats:
+            state = self.hass.states.get(entity_id)
+            if state is None:
+                continue
+            try:
+                values.append(float(state.attributes["temperature"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if not values:
+            return None
+        return round(sum(values) / len(values) * 2) / 2
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.coordinator.async_set_room_setpoint(self._room_id, float(value))

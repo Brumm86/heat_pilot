@@ -44,15 +44,15 @@
           "description": "Lege einen Raum mit Thermostaten, Zeitplan und optionalen Tür-/Fenstersensoren und Personen an.",
           "data": {
             "name": "Raumname",
-            "thermostats": "Thermostate (leer lassen, wenn der Raum nicht über Thermostate beheizt wird)",
-            "schedule": "Zeitplan (an = Komfort, aus = Absenkung; nur mit Thermostaten nötig)",
+            "heating_type": "Beheizung",
+            "thermostats": "Thermostate (nicht nötig bei „Anderweitig“)",
+            "schedule": "Zeitplan (an = Komfort, aus = Absenkung; nicht nötig bei „Anderweitig“)",
             "door_sensors": "Türsensoren",
             "window_sensors": "Fenstersensoren",
             "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
             "notify_persons": "Personen, deren Handys Tür-/Lüftungsmeldungen bekommen (leer = alle)",
             "open_delay_minutes": "Minuten offen bis zum Abschalten",
-            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten",
-            "external_heating": "Raum wird anders beheizt (z. B. Fußbodenheizung): Türwarnung auch ohne Heizen über Thermostat"
+            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten"
           }
         },
         "reconfigure": {
@@ -60,15 +60,15 @@
           "description": "Ändere Thermostate, Zeitplan, Sensoren, Personen und Wartezeiten des Raums.",
           "data": {
             "name": "Raumname",
-            "thermostats": "Thermostate (leer lassen, wenn der Raum nicht über Thermostate beheizt wird)",
-            "schedule": "Zeitplan (an = Komfort, aus = Absenkung; nur mit Thermostaten nötig)",
+            "heating_type": "Beheizung",
+            "thermostats": "Thermostate (nicht nötig bei „Anderweitig“)",
+            "schedule": "Zeitplan (an = Komfort, aus = Absenkung; nicht nötig bei „Anderweitig“)",
             "door_sensors": "Türsensoren",
             "window_sensors": "Fenstersensoren",
             "persons": "Personen (Raum wird abgeschaltet, wenn alle abwesend sind)",
             "notify_persons": "Personen, deren Handys Tür-/Lüftungsmeldungen bekommen (leer = alle)",
             "open_delay_minutes": "Minuten offen bis zum Abschalten",
-            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten",
-            "external_heating": "Raum wird anders beheizt (z. B. Fußbodenheizung): Türwarnung auch ohne Heizen über Thermostat"
+            "absence_delay_minutes": "Minuten abwesend bis zum Abschalten"
           }
         }
       },
@@ -116,7 +116,7 @@
         "name": "Boost"
       },
       "night_setback": {
-        "name": "Nachtabsenkung"
+        "name": "Erzwungene Nachtabsenkung"
       },
       "period_paused": {
         "name": "Heizperiode pausieren"
@@ -140,6 +140,9 @@
       },
       "boost_minutes": {
         "name": "Boost-Dauer"
+      },
+      "setpoint": {
+        "name": "Solltemperatur"
       }
     },
     "sensor": {
@@ -154,7 +157,8 @@
           "setback": "Absenkung",
           "comfort_skipped": "Komfort (Absenkung übersprungen)",
           "boost": "Boost",
-          "plan_paused": "Heizplan pausiert"
+          "plan_paused": "Heizplan pausiert",
+          "night_setback": "Nachtabsenkung"
         }
       },
       "heating_period": {
@@ -166,6 +170,9 @@
       },
       "active_alerts": {
         "name": "Aktive Meldungen"
+      },
+      "next_night_setback": {
+        "name": "Nächste Absenkung"
       }
     },
     "binary_sensor": {
@@ -179,8 +186,22 @@
       }
     },
     "time": {
-      "night_setback_time": {
-        "name": "Uhrzeit der Nachtabsenkung"
+      "night_weekday_start": {
+        "name": "Nacht So–Do: Beginn"
+      },
+      "night_weekday_end": {
+        "name": "Nacht So–Do: Ende"
+      },
+      "night_weekend_start": {
+        "name": "Nacht Fr+Sa: Beginn"
+      },
+      "night_weekend_end": {
+        "name": "Nacht Fr+Sa: Ende"
+      }
+    },
+    "button": {
+      "night_setback_later": {
+        "name": "Absenkung eine Stunde später"
       }
     }
   },
@@ -221,6 +242,15 @@
     },
     "zha_missing": {
       "message": "Die ZHA-Integration ist nicht geladen; der Anlernmodus kann nicht gestartet werden."
+    }
+  },
+  "selector": {
+    "heating_type": {
+      "options": {
+        "thermostat": "Thermostat",
+        "external": "Anderweitig (nicht über Home Assistant, z. B. Fußbodenheizung)",
+        "combined": "Kombiniert (Thermostat und anderweitig)"
+      }
     }
   }
 }

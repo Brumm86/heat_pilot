@@ -14,6 +14,9 @@ Priority (highest first):
 6. Schedule paused for today      -> setback
 7. Schedule                        -> comfort or setback
    (the one-shot "skip setback" flag turns a setback phase into comfort)
+   A setback phase inside the room's forced night window is reported as
+   ``night_setback`` (same target; the coordinator additionally reverts
+   manual raises then). A schedule in its comfort phase always wins.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ class Reason(StrEnum):
     COMFORT_SKIPPED = "comfort_skipped"
     BOOST = "boost"
     PLAN_PAUSED = "plan_paused"
+    NIGHT_SETBACK = "night_setback"
 
 
 HVAC_OFF = "off"
@@ -73,6 +77,8 @@ class RoomInputs:
     boost_active: bool = False
     # The schedule is paused for today: the room stays in its setback phase.
     plan_paused: bool = False
+    # The room's forced night setback is on and its night window is running.
+    night_setback_active: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +131,9 @@ def decide(inputs: RoomInputs) -> Decision:
     elif inputs.skip_setback:
         reason = Reason.COMFORT_SKIPPED
         target = inputs.comfort_temp
+    elif inputs.night_setback_active:
+        reason = Reason.NIGHT_SETBACK
+        target = inputs.setback_temp
     else:
         reason = Reason.SETBACK
         target = inputs.setback_temp

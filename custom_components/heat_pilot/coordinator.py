@@ -22,9 +22,12 @@ happens at all, the shutdown only switches the thermostats off, and after
 closing they are switched back on with the setpoint they have - unless the
 room's plan target changed in the meantime (then the new target is set).
 
-A room without schedule can have a daily night setback: at a set time the
-room is lowered to its setback temperature (a plain evaluation of the room,
-which leaves a thermostat that is switched off alone).
+A room with thermostats can have a forced night setback (switch per room). The
+night windows are global (weekday and weekend times, see ``night.py``). While a
+room's window runs and its schedule is not in a comfort phase, the room stays at
+its setback temperature: a manual raise is taken back at once, a lower setting
+stays, and a thermostat that is switched off is left alone. A room can push the
+start of one night back hour by hour; "skip setback" cancels the night.
 
 A room can be boosted: for a configurable time its thermostats are turned up
 to their maximum. The end is persisted and re-armed after a restart.
@@ -80,7 +83,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ABSENCE_DELAY,
     CONF_DOOR_SENSORS,
-    CONF_EXTERNAL_HEATING,
+    CONF_HEATING_TYPE,
     CONF_NOTIFY_PERSONS,
     CONF_OPEN_DELAY,
     CONF_PERSONS,
@@ -88,13 +91,18 @@ from .const import (
     CONF_THERMOSTATS,
     CONF_WINDOW_SENSORS,
     DEFAULT_ABSENCE_DELAY,
-    DEFAULT_NIGHT_SETBACK_TIME,
+    DEFAULT_NIGHT_TIMES,
     DEFAULT_OPEN_DELAY,
     DOMAIN,
     FEATURE_ABSENCE_SHUTDOWN,
     FEATURE_MAX_LIMIT,
     FEATURE_OPENING_SHUTDOWN,
+    HEATING_EXTERNAL,
+    HEATING_THERMOSTAT,
+    MAX_NIGHT_SHIFT_HOURS,
+    NIGHT_TIME_KEYS,
     SUBENTRY_ROOM,
+    heating_type_of,
 )
 from .decision import (
     HVAC_OFF,
@@ -105,6 +113,7 @@ from .decision import (
     in_heating_period,
     sensor_is_open,
 )
+from . import night as nightlib
 from .storage import HeatPilotStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,8 +144,8 @@ class RoomConfig:
     persons: tuple[str, ...]
     open_delay: int
     absence_delay: int
-    # Room is (also) heated outside Home Assistant, e.g. by underfloor heating.
-    external_heating: bool = False
+    # thermostat / external / combined (see const.HEATING_TYPES).
+    heating_type: str = HEATING_THERMOSTAT
     # Persons whose phones receive the room's door/ventilation messages;
     # empty means every person with a phone.
     notify_persons: tuple[str, ...] = ()
@@ -147,12 +156,12 @@ class RoomConfig:
 
         A room without any thermostat is heated externally by definition.
         """
-        return self.external_heating or not self.thermostats
+        return self.heating_type != HEATING_THERMOSTAT or not self.thermostats
 
     @property
     def night_setback_available(self) -> bool:
-        """Only a heated room without schedule can have a night setback."""
-        return bool(self.thermostats) and self.schedule is None
+        """Every room with thermostats can have the forced night setback."""
+        return bool(self.thermostats)
 
     @property
     def openings(self) -> tuple[str, ...]:
@@ -161,17 +170,20 @@ class RoomConfig:
     @classmethod
     def from_subentry(cls, subentry: ConfigSubentry) -> RoomConfig:
         data = subentry.data
+        heating_type = heating_type_of(data)
+        external_only = heating_type == HEATING_EXTERNAL
         return cls(
             room_id=subentry.subentry_id,
             name=subentry.title,
-            thermostats=tuple(data.get(CONF_THERMOSTATS, [])),
-            schedule=data.get(CONF_SCHEDULE) or None,
+            # A room heated only externally has no thermostats and no schedule.
+            thermostats=() if external_only else tuple(data.get(CONF_THERMOSTATS, [])),
+            schedule=None if external_only else (data.get(CONF_SCHEDULE) or None),
             door_sensors=tuple(data.get(CONF_DOOR_SENSORS, [])),
             window_sensors=tuple(data.get(CONF_WINDOW_SENSORS, [])),
             persons=tuple(data.get(CONF_PERSONS, [])),
             open_delay=int(data.get(CONF_OPEN_DELAY, DEFAULT_OPEN_DELAY)),
             absence_delay=int(data.get(CONF_ABSENCE_DELAY, DEFAULT_ABSENCE_DELAY)),
-            external_heating=bool(data.get(CONF_EXTERNAL_HEATING, False)),
+            heating_type=heating_type,
             notify_persons=tuple(data.get(CONF_NOTIFY_PERSONS, [])),
         )
 
@@ -232,6 +244,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         self._return_unsub: CALLBACK_TYPE | None = None
         self._boost_unsubs: dict[str, CALLBACK_TYPE] = {}
         self._night_unsubs: dict[str, CALLBACK_TYPE] = {}
+        # Whether the room's night window was running at the last boundary check.
+        self._night_was_active: dict[str, bool] = {}
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------ setup
@@ -248,7 +262,8 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
 
         self._register_listeners()
         for room_id in self.rooms:
-            self._arm_night_setback(room_id)
+            self._night_was_active[room_id] = self._night_window_active(room_id, now)
+            self._arm_night(room_id)
         self._expire_or_schedule_return()
         self._restore_boosts(now)
         self.async_set_updated_data(self._compute_all(now))
@@ -439,6 +454,9 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             max_temp=float(g["max_temp"]),
             boost_active=self.boost_active(room.room_id, now),
             plan_paused=self.plan_paused(room.room_id, now),
+            night_setback_active=bool(r["night_setback"])
+            and room.night_setback_available
+            and self._night_window_active(room.room_id, now),
         )
 
     def _compute_status(self, room: RoomConfig, now: datetime) -> RoomStatus:
@@ -551,13 +569,13 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         room_id: str,
         *,
         opening_event: bool = False,
-        night_setback: bool = False,
+        status_only: bool = False,
     ) -> None:
         """Decide for one room, apply it to its thermostats, publish status.
 
         ``opening_event`` marks an evaluation caused by a door/window sensor
-        changing its state (see :meth:`_apply_policy`). ``night_setback`` marks
-        the daily night setback: a thermostat that is switched off stays off.
+        changing its state (see :meth:`_apply_policy`). ``status_only`` only
+        refreshes the published status and leaves the thermostats alone.
         """
         room = self.rooms.get(room_id)
         if room is None:
@@ -572,13 +590,16 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             self._refresh_timers(room, now)
             self._note_heating(room, now)
             status = self._compute_status(room, now)
-            policy = self._apply_policy(room, now, status.decision, opening_event)
+            policy = (
+                _APPLY_NONE
+                if status_only
+                else self._apply_policy(room, now, status.decision, opening_event)
+            )
             if policy != _APPLY_NONE:
                 await self._async_apply(
                     room,
                     status.decision,
                     keep_setpoint=policy == _APPLY_KEEP_SETPOINT,
-                    leave_off=night_setback,
                 )
             self.async_set_updated_data({**(self.data or {}), room_id: status})
 
@@ -588,8 +609,9 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
         decision: Decision,
         *,
         keep_setpoint: bool = False,
-        leave_off: bool = False,
     ) -> None:
+        # The night setback only ever lowers a room; it never switches one on.
+        leave_off = decision.reason is Reason.NIGHT_SETBACK
         for entity_id in room.thermostats:
             state = self.hass.states.get(entity_id)
             if state is None or state.state in _NOT_REPORTING:
@@ -665,6 +687,21 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
             await self._async_climate(
                 SERVICE_SET_HVAC_MODE, entity_id, {ATTR_HVAC_MODE: HVACMode.OFF}
             )
+            return
+
+        if reason is Reason.NIGHT_SETBACK and state.state != HVACMode.OFF:
+            # Forced night setback: a manual raise is taken back at once; a
+            # lower setting stays.
+            target = decide(inputs).target
+            setpoint = state.attributes.get(ATTR_TEMPERATURE)
+            if (
+                target is not None
+                and setpoint is not None
+                and float(setpoint) > target + _SETPOINT_TOLERANCE
+            ):
+                await self._async_climate(
+                    SERVICE_SET_TEMPERATURE, entity_id, {ATTR_TEMPERATURE: target}
+                )
             return
 
         # A running boost keeps its setpoint even while a door/window or absence
@@ -769,68 +806,152 @@ class HeatPilotCoordinator(DataUpdateCoordinator[dict[str, RoomStatus]]):
 
     # ------------------------------------------------------------ night setback
 
-    def night_setback_time(self, room_id: str) -> dt_time:
-        """The daily time of the room's night setback (local time)."""
-        raw = self.store.room(room_id)["night_setback_time"]
+    def night_time(self, key: str) -> dt_time:
+        """One of the four global night times (``NIGHT_TIME_KEYS``)."""
         try:
-            return dt_time.fromisoformat(raw)
-        except (TypeError, ValueError):
-            return dt_time.fromisoformat(DEFAULT_NIGHT_SETBACK_TIME)
+            return dt_time.fromisoformat(self.store.global_state["night"][key])
+        except (KeyError, TypeError, ValueError):
+            return dt_time.fromisoformat(DEFAULT_NIGHT_TIMES[key])
 
-    async def async_set_night_setback(
-        self,
-        room_id: str,
-        *,
-        enabled: bool | None = None,
-        at: dt_time | None = None,
-    ) -> None:
-        """Switch the night setback or change its time.
+    def _night_times(self) -> dict[str, str]:
+        return {key: self.night_time(key).isoformat(timespec="minutes") for key in NIGHT_TIME_KEYS}
 
-        This does not evaluate the room: changing the option must not lower
-        (or raise) the room right away, only the set time does.
-        """
+    def _night_args(self, room_id: str) -> tuple[dict[str, str], int, str | None]:
+        r = self.store.room(room_id)
+        return self._night_times(), int(r["night_shift_hours"]), r["night_shift_night"]
+
+    def _night_window_active(self, room_id: str, now: datetime) -> bool:
+        """The room's night window is running (whether or not the option is on)."""
+        room = self.rooms.get(room_id)
+        if room is None or not room.night_setback_available:
+            return False
+        return nightlib.is_active(dt_util.as_local(now), *self._night_args(room_id))
+
+    def night_setback_active(self, room_id: str) -> bool:
+        """The forced night setback is on and its window is running."""
+        return bool(self.store.room(room_id)["night_setback"]) and self._night_window_active(
+            room_id, dt_util.utcnow()
+        )
+
+    def next_night_start(self, room_id: str) -> datetime | None:
+        """Start of the room's next night window (shift included)."""
+        return nightlib.next_start(dt_util.as_local(dt_util.utcnow()), *self._night_args(room_id))
+
+    def night_shift_hours(self, room_id: str) -> int:
+        """Hours the start of the current/next night is pushed back."""
+        now = dt_util.as_local(dt_util.utcnow())
+        times, hours, night = self._night_args(room_id)
+        if night == nightlib.upcoming_night(now, times).isoformat():
+            return hours
+        return 0
+
+    async def async_set_night_time(self, key: str, value: dt_time) -> None:
+        """Change one of the global night times."""
+        self.store.global_state["night"][key] = value.replace(
+            second=0, microsecond=0, tzinfo=None
+        ).isoformat(timespec="minutes")
+        self.store.schedule_save()
+        for room_id in self.rooms:
+            await self._async_sync_night(room_id)
+        self.async_update_listeners()
+
+    async def async_set_night_setback(self, room_id: str, enabled: bool) -> None:
+        """Switch a room's forced night setback on or off."""
         if self.rooms.get(room_id) is None:
             return
-        room_state = self.store.room(room_id)
-        if enabled is not None:
-            room_state["night_setback"] = enabled
-        if at is not None:
-            room_state["night_setback_time"] = at.replace(
-                second=0, microsecond=0, tzinfo=None
-            ).isoformat(timespec="minutes")
-        self._arm_night_setback(room_id)
+        self.store.room(room_id)["night_setback"] = enabled
         self.store.schedule_save()
+        # Inside a running window the change takes effect right away.
+        running = self._night_window_active(room_id, dt_util.utcnow())
+        await self.async_evaluate_room(room_id, status_only=not (enabled and running))
+
+    async def async_shift_night(self, room_id: str) -> None:
+        """Push the start of the room's current/next night back by one hour."""
+        room = self.rooms.get(room_id)
+        if room is None or not room.night_setback_available:
+            return
+        now = dt_util.as_local(dt_util.utcnow())
+        times, hours, shifted = self._night_args(room_id)
+        night = nightlib.upcoming_night(now, times)
+        current = hours if shifted == night.isoformat() else 0
+        if current >= MAX_NIGHT_SHIFT_HOURS or nightlib.room_window(
+            night, times, now.tzinfo, current, night.isoformat()
+        ) is None:
+            return  # already beyond the end: no setback this night
+        room_state = self.store.room(room_id)
+        room_state["night_shift_hours"] = current + 1
+        room_state["night_shift_night"] = night.isoformat()
+        self.store.schedule_save()
+        await self._async_sync_night(room_id)
         self.async_update_listeners()
 
     @callback
-    def _arm_night_setback(self, room_id: str) -> None:
-        """(Re)arm the daily timer of a room's night setback."""
+    def _arm_night(self, room_id: str) -> None:
+        """(Re)arm the timer for the room's next window start or end."""
         if cancel := self._night_unsubs.pop(room_id, None):
             cancel()
         room = self.rooms.get(room_id)
         if room is None or not room.night_setback_available:
             return
-        if not self.store.room(room_id)["night_setback"]:
+        boundary = nightlib.next_boundary(
+            dt_util.as_local(dt_util.utcnow()), *self._night_args(room_id)
+        )
+        if boundary is None:
             return
-        at = self.night_setback_time(room_id)
 
         @callback
         def _fire(_now: datetime) -> None:
-            self._spawn(self._async_night_setback(room_id))
+            self._night_unsubs.pop(room_id, None)
+            self._spawn(self._async_sync_night(room_id, fired=True))
 
-        self._night_unsubs[room_id] = async_track_time_change(
-            self.hass, _fire, hour=at.hour, minute=at.minute, second=0
+        self._night_unsubs[room_id] = async_track_point_in_time(
+            self.hass, _fire, boundary
         )
 
-    async def _async_night_setback(self, room_id: str) -> None:
-        """Lower the room to its setback temperature (the set time has come)."""
+    async def _async_sync_night(self, room_id: str, *, fired: bool = False) -> None:
+        """React to a window having started or ended, then re-arm the timer."""
+        room = self.rooms.get(room_id)
+        if room is None or not room.night_setback_available:
+            return
+        # A timer may fire a few milliseconds early: look just past the boundary.
+        now = dt_util.utcnow() + (timedelta(seconds=2) if fired else timedelta())
+        active = self._night_window_active(room_id, now)
+        was_active = self._night_was_active.get(room_id, False)
+        self._night_was_active[room_id] = active
+        self._arm_night(room_id)
         room_state = self.store.room(room_id)
-        # Without schedule "skip setback" has no comfort start that ends it; the
-        # night setback does.
-        if room_state["skip_setback"]:
-            room_state["skip_setback"] = False
-            self.store.schedule_save()
-        await self.async_evaluate_room(room_id, night_setback=True)
+        enabled = bool(room_state["night_setback"])
+        if active and not was_active and enabled:
+            await self.async_evaluate_room(room_id)
+        elif was_active and not active:
+            # The night is over: "skip setback" has done its job. (With a
+            # schedule it normally ends at the next comfort start; without
+            # one, or with the night setback on, it ends here.)
+            if room_state["skip_setback"] and (room.schedule is None or enabled):
+                room_state["skip_setback"] = False
+                self.store.schedule_save()
+            await self.async_evaluate_room(room_id, status_only=True)
+        else:
+            await self.async_evaluate_room(room_id, status_only=True)
+
+    async def async_set_room_setpoint(self, room_id: str, value: float) -> None:
+        """Set the setpoint of all the room's thermostats (switching them on)."""
+        room = self.rooms.get(room_id)
+        if room is None:
+            return
+        for entity_id in room.thermostats:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in _NOT_REPORTING:
+                continue
+            if state.state == HVACMode.OFF:
+                if HVACMode.HEAT not in (state.attributes.get(ATTR_HVAC_MODES) or []):
+                    continue
+                await self._async_climate(
+                    SERVICE_SET_HVAC_MODE, entity_id, {ATTR_HVAC_MODE: HVACMode.HEAT}
+                )
+            await self._async_climate(
+                SERVICE_SET_TEMPERATURE, entity_id, {ATTR_TEMPERATURE: value}
+            )
 
     # -------------------------------------------------------------------- boost
 

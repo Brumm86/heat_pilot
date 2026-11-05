@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
@@ -26,10 +27,11 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data
     async_add_entities([HeatingPeriodSensor(coordinator), ActiveAlertsSensor(coordinator)])
-    for room_id in coordinator.rooms:
-        async_add_entities(
-            [RoomStatusSensor(coordinator, room_id)], config_subentry_id=room_id
-        )
+    for room_id, room in coordinator.rooms.items():
+        entities: list[SensorEntity] = [RoomStatusSensor(coordinator, room_id)]
+        if room.night_setback_available:
+            entities.append(NextNightSetbackSensor(coordinator, room_id))
+        async_add_entities(entities, config_subentry_id=room_id)
 
 
 class RoomStatusSensor(HeatPilotEntity, SensorEntity):
@@ -63,6 +65,28 @@ class RoomStatusSensor(HeatPilotEntity, SensorEntity):
             "unavailable_sensors": list(status.unavailable_sensors),
             "schedule": room.schedule if room else None,
             "thermostats": list(room.thermostats) if room else [],
+        }
+
+
+class NextNightSetbackSensor(HeatPilotEntity, SensorEntity):
+    """When the room's forced night setback starts next (shift included)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:weather-night"
+
+    def __init__(self, coordinator: HeatPilotCoordinator, room_id: str) -> None:
+        super().__init__(coordinator, "next_night_setback", room_id)
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.coordinator.next_night_start(self._room_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "enabled": bool(self.coordinator.room_state(self._room_id)["night_setback"]),
+            "active": self.coordinator.night_setback_active(self._room_id),
+            "shift_hours": self.coordinator.night_shift_hours(self._room_id),
         }
 
 

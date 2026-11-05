@@ -231,3 +231,22 @@ def test_paused_plan_beats_skip_setback_but_not_boost_opening_or_period() -> Non
     assert decide(replace(paused, opening_open_beyond_delay=True)).reason is Reason.OPENING
     assert decide(replace(paused, absence_mode=True)).reason is Reason.ABSENCE_MODE
     assert decide(replace(paused, period_active=False)).reason is Reason.OUTSIDE_PERIOD
+
+
+def test_night_setback_reports_its_own_reason_with_the_setback_target() -> None:
+    result = decide(replace(BASE, schedule_on=False, night_setback_active=True))
+    assert (result.hvac_mode, result.target, result.reason) == (
+        HVAC_HEAT, 17.0, Reason.NIGHT_SETBACK,
+    )
+
+
+def test_schedule_comfort_beats_the_night_setback() -> None:
+    result = decide(replace(BASE, schedule_on=True, night_setback_active=True))
+    assert result.reason is Reason.COMFORT
+
+
+def test_skip_setback_beats_the_night_setback() -> None:
+    result = decide(
+        replace(BASE, schedule_on=False, skip_setback=True, night_setback_active=True)
+    )
+    assert result.reason is Reason.COMFORT_SKIPPED

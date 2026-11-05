@@ -19,7 +19,7 @@ from .const import (
     DEFAULT_BOOST_MINUTES,
     DEFAULT_COMFORT_TEMP,
     DEFAULT_FROST_TEMP,
-    DEFAULT_NIGHT_SETBACK_TIME,
+    DEFAULT_NIGHT_TIMES,
     DEFAULT_MAX_TEMP,
     DEFAULT_PERIOD_END,
     DEFAULT_PERIOD_START,
@@ -44,6 +44,8 @@ def _default_global() -> dict[str, Any]:
         "period_override": False,
         # Paused heating period: counts as inactive, beats date and override.
         "period_paused": False,
+        # Forced night setback windows ("HH:MM"), see night.py.
+        "night": dict(DEFAULT_NIGHT_TIMES),
     }
 
 
@@ -62,9 +64,11 @@ def _default_room() -> dict[str, Any]:
         # ISO date of the last day on which the room asked for heat; used to
         # decide whether a room was "heated today".
         "heated_day": None,
-        # Night setback (rooms without schedule only): switch and daily time.
+        # Forced night setback: switch, and the "one hour later" shift of one
+        # night (identified by the ISO date on which that night begins).
         "night_setback": False,
-        "night_setback_time": DEFAULT_NIGHT_SETBACK_TIME,
+        "night_shift_hours": 0,
+        "night_shift_night": None,
         # While a door/window shutdown lasts: [hvac_mode, target] the room's plan
         # had when it started. Decides whether the setpoint is set on release.
         "opening_plan": None,
@@ -90,6 +94,7 @@ class HeatPilotStore:
             return
         merged_global = _default_global()
         merged_global.update(stored.get("global", {}))
+        merged_global["night"] = {**DEFAULT_NIGHT_TIMES, **merged_global.get("night", {})}
         self.data["global"] = merged_global
         rooms: dict[str, Any] = {}
         for room_id, room in stored.get("rooms", {}).items():
@@ -98,6 +103,7 @@ class HeatPilotStore:
             features.update(room.get("features", {}))
             merged.update({k: v for k, v in room.items() if k != "features"})
             merged["features"] = features
+            merged.pop("night_setback_time", None)  # pre-0.14 per-room time
             rooms[room_id] = merged
         self.data["rooms"] = rooms
 

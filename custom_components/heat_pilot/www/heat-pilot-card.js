@@ -35,7 +35,6 @@
       period_override: "Heizperiode erzwingen",
       period_paused: "Heizperiode pausieren",
       plan_paused: "Heizplan heute pausieren",
-      door_group: "Tür-/Fenstersensor",
       pair_start: "Anlernmodus starten",
       pair_started: "Anlernmodus aktiv (2 Min.)",
       frost_temp: "Frostschutz",
@@ -54,8 +53,13 @@
       boost: "Boost",
       boost_until: "bis",
       boost_minutes: "Boost-Dauer",
-      night_setback: "Nachtabsenkung",
-      night_setback_time: "Nachtabsenkung um",
+      night_setback: "Erzwungene Nachtabsenkung",
+      night_next: "Nächste Absenkung",
+      night_later: "+1 Std.",
+      night_weekday: "Nacht So–Do",
+      night_weekend: "Nacht Fr+Sa",
+      night_to: "bis",
+      setpoint: "Solltemperatur",
       edit_plan: "Plan bearbeiten",
       next_change: "Nächster Wechsel",
       open: "offen",
@@ -84,7 +88,6 @@
       period_override: "Force heating period",
       period_paused: "Pause heating period",
       plan_paused: "Pause schedule today",
-      door_group: "Door/window sensor",
       pair_start: "Start pairing mode",
       pair_started: "Pairing mode active (2 min)",
       frost_temp: "Frost protection",
@@ -103,8 +106,13 @@
       boost: "Boost",
       boost_until: "until",
       boost_minutes: "Boost duration",
-      night_setback: "Night setback",
-      night_setback_time: "Night setback at",
+      night_setback: "Forced night setback",
+      night_next: "Next setback",
+      night_later: "+1 h",
+      night_weekday: "Night Sun–Thu",
+      night_weekend: "Night Fri+Sat",
+      night_to: "to",
+      setpoint: "Target temperature",
       edit_plan: "Edit schedule",
       next_change: "Next change",
       open: "open",
@@ -123,8 +131,8 @@
     "night_setback",
   ];
 
-  // Everything that belongs to a door/window sensor; shown in a collapsible
-  // group, only for rooms that have such a sensor (they own the "opening" entity).
+  // Everything that belongs to a door/window sensor; shown only for rooms that
+  // have such a sensor (they own the "opening" entity).
   var DOOR_SWITCHES = [
     "door_warning",
     "door_warning_setback_only",
@@ -143,6 +151,7 @@
     comfort_skipped: "mdi:weather-night-off",
     boost: "mdi:fire",
     plan_paused: "mdi:calendar-remove-outline",
+    night_setback: "mdi:weather-night",
   };
 
   function esc(value) {
@@ -209,8 +218,8 @@
     ".empty{padding:16px 0;color:var(--secondary-text-color)}" +
     ".icon{display:inline-flex;align-items:center;--mdc-icon-size:22px;color:var(--primary-color)}" +
     ".icon.warn{color:var(--error-color,#e53935)}" +
-    ".subsec{margin-top:4px;padding-left:12px;border-left:2px solid var(--divider-color)}" +
-    ".subsec .head{min-height:36px}";
+    ".slider{display:flex;align-items:center;gap:10px;flex:1;min-width:180px;justify-content:flex-end}" +
+    ".slider ha-slider,.slider input{flex:1;min-width:120px}";
 
   class HeatPilotCard extends HTMLElement {
     constructor() {
@@ -446,7 +455,51 @@
       }
       html += this._stepper(g.frost_temp, this._t("frost_temp"));
       html += this._stepper(g.max_temp, this._t("max_temp"));
+      html += this._nightRow(g, "weekday") + this._nightRow(g, "weekend");
       return html;
+    }
+
+    /** One global night window: start and end, each opens its time dialog. */
+    _nightRow(g, kind) {
+      var start = this._state(g["night_" + kind + "_start"]);
+      var end = this._state(g["night_" + kind + "_end"]);
+      if (!start || !end) {
+        return "";
+      }
+      var link = function (st, id) {
+        return (
+          '<button class="link" data-act="plan" data-ent="' + esc(id) + '">' +
+          esc(String(st.state).slice(0, 5)) + "</button>"
+        );
+      };
+      return (
+        '<div class="row"><span>' + esc(this._t("night_" + kind)) + "</span><span>" +
+        link(start, g["night_" + kind + "_start"]) + " " + esc(this._t("night_to")) + " " +
+        link(end, g["night_" + kind + "_end"]) + "</span></div>"
+      );
+    }
+
+    /** Slider for the room's setpoint (HA's slider, a native range as fallback). */
+    _slider(entityId, label) {
+      var st = this._state(entityId);
+      if (!st) {
+        return "";
+      }
+      var min = num(st.attributes.min) !== null ? num(st.attributes.min) : 5;
+      var max = num(st.attributes.max) !== null ? num(st.attributes.max) : 30;
+      var step = num(st.attributes.step) || 0.5;
+      var value = num(st.state);
+      var common =
+        ' min="' + min + '" max="' + max + '" step="' + step + '" value="' + (value === null ? min : value) +
+        '" data-act="slider" data-ent="' + esc(entityId) + '"' +
+        (st.state === "unavailable" ? " disabled" : "");
+      var control = customElements.get("ha-slider")
+        ? "<ha-slider labeled" + common + "></ha-slider>"
+        : '<input type="range"' + common + ">";
+      return (
+        '<div class="row"><span>' + esc(label) + '</span><span class="slider">' + control +
+        '<span class="v" data-slider-label>' + (value === null ? "–" : fmtTemp(value)) + "</span></span></div>"
+      );
     }
 
     /** Alerts that were sent to the phones and whose cause still exists. */
@@ -534,6 +587,7 @@
         html += "</div>";
       }
       if ((attrs.thermostats || []).length) {
+        html += this._slider(e.setpoint, this._t("setpoint"));
         html += this._stepper(e.comfort, this._t("comfort"));
         html += this._stepper(e.setback, this._t("setback"));
       }
@@ -554,28 +608,23 @@
         }
       });
       if (e.opening) {
-        var doorKey = room.id + ":door";
-        var doorHtml = "";
         DOOR_SWITCHES.forEach(function (key) {
           if (e[key]) {
-            doorHtml += self._toggle(e[key], self._t(key));
+            html += self._toggle(e[key], self._t(key));
           }
         });
-        if (doorHtml) {
-          html += '<div class="subsec">' +
-            this._head(doorKey, "<span>" + esc(this._t("door_group")) + "</span>", "");
-          if (this._open[doorKey]) {
-            html += '<div class="body">' + doorHtml + "</div>";
-          }
-          html += "</div>";
-        }
       }
-      var nightTime = this._state(e.night_setback_time);
-      if (nightTime && nightTime.state !== "unavailable" && nightTime.state !== "unknown") {
+      var nextNight = this._state(e.next_night_setback);
+      if (nextNight && nextNight.state !== "unavailable" && nextNight.state !== "unknown") {
+        var shift = num(nextNight.attributes.shift_hours) || 0;
         html +=
-          '<div class="row"><span>' + esc(this._t("night_setback_time")) + "</span>" +
-          '<button class="link" data-act="plan" data-ent="' + esc(e.night_setback_time) + '">' +
-          esc(String(nightTime.state).slice(0, 5)) + "</button></div>";
+          '<div class="row"><span>' + esc(this._t("night_next")) + ": " +
+          esc(this._fmtTime(nextNight.state)) + (shift ? " (+" + shift + " h)" : "") + "</span>" +
+          (e.night_setback_later
+            ? '<button class="link" data-act="press" data-ent="' + esc(e.night_setback_later) + '">' +
+              esc(this._t("night_later")) + "</button>"
+            : "") +
+          "</div>";
       }
       if (attrs.schedule && hass.states[attrs.schedule]) {
         html +=
@@ -644,6 +693,19 @@
           node.addEventListener("change", function () {
             self._call("switch", node.checked ? "turn_on" : "turn_off", {
               entity_id: node.getAttribute("data-ent"),
+            });
+          });
+        } else if (act === "slider") {
+          var label = node.parentNode.querySelector("[data-slider-label]");
+          node.addEventListener("input", function () {
+            if (label) {
+              label.textContent = fmtTemp(node.value);
+            }
+          });
+          node.addEventListener("change", function () {
+            self._call("number", "set_value", {
+              entity_id: node.getAttribute("data-ent"),
+              value: num(node.value),
             });
           });
         } else {
@@ -716,6 +778,8 @@
         if (min !== null) value = Math.max(min, value);
         if (max !== null) value = Math.min(max, value);
         this._call("number", "set_value", { entity_id: ent, value: Math.round(value * 100) / 100 });
+      } else if (act === "press") {
+        this._call("button", "press", { entity_id: ent });
       } else if (act === "pair") {
         var self = this;
         this._call("heat_pilot", "pair_door_sensor", {}).then(function () {

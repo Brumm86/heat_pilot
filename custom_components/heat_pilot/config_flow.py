@@ -21,7 +21,6 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
-    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -29,6 +28,7 @@ from homeassistant.helpers.selector import (
     NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
 )
 
@@ -37,7 +37,7 @@ from .const import (
     CONF_ADMIN_NOTIFY,
     CONF_DASHBOARD_PATH,
     CONF_DOOR_SENSORS,
-    CONF_EXTERNAL_HEATING,
+    CONF_HEATING_TYPE,
     CONF_NOTIFY_PERSONS,
     CONF_OPEN_DELAY,
     CONF_OVERHEAT_MINUTES,
@@ -57,7 +57,11 @@ from .const import (
     DEFAULT_UNAVAILABLE_DELAY,
     DEFAULT_VENTILATION_DELAY,
     DOMAIN,
+    HEATING_EXTERNAL,
+    HEATING_THERMOSTAT,
+    HEATING_TYPES,
     SUBENTRY_ROOM,
+    heating_type_of,
 )
 
 DEFAULT_TITLE = "Heat Pilot"
@@ -72,13 +76,19 @@ def _room_schema(notify_persons: list[str] | None = None) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_NAME): TextSelector(),
+            vol.Required(CONF_HEATING_TYPE, default=HEATING_THERMOSTAT): SelectSelector(
+                SelectSelectorConfig(
+                    options=list(HEATING_TYPES),
+                    mode=SelectSelectorMode.DROPDOWN,
+                    translation_key=CONF_HEATING_TYPE,
+                )
+            ),
             vol.Optional(CONF_THERMOSTATS, default=[]): EntitySelector(
                 EntitySelectorConfig(domain="climate", multiple=True)
             ),
             vol.Optional(CONF_SCHEDULE): EntitySelector(
                 EntitySelectorConfig(domain="schedule")
             ),
-            vol.Optional(CONF_EXTERNAL_HEATING, default=False): BooleanSelector(),
             vol.Optional(CONF_DOOR_SENSORS, default=[]): EntitySelector(
                 EntitySelectorConfig(domain="binary_sensor", multiple=True)
             ),
@@ -161,6 +171,10 @@ class RoomSubentryFlow(ConfigSubentryFlow):
             errors = self._validate(entry, step_id, user_input)
             if not errors:
                 data = {k: v for k, v in user_input.items() if k != CONF_NAME}
+                if data[CONF_HEATING_TYPE] == HEATING_EXTERNAL:
+                    # Heated outside Home Assistant: no thermostats, no schedule.
+                    data[CONF_THERMOSTATS] = []
+                    data.pop(CONF_SCHEDULE, None)
                 data[CONF_OPEN_DELAY] = int(data[CONF_OPEN_DELAY])
                 data[CONF_ABSENCE_DELAY] = int(data[CONF_ABSENCE_DELAY])
                 title = user_input[CONF_NAME].strip()
@@ -177,7 +191,11 @@ class RoomSubentryFlow(ConfigSubentryFlow):
             suggested = user_input
         elif step_id == "reconfigure":
             subentry = self._get_reconfigure_subentry()
-            suggested = {CONF_NAME: subentry.title, **subentry.data}
+            suggested = {
+                CONF_NAME: subentry.title,
+                **subentry.data,
+                CONF_HEATING_TYPE: heating_type_of(subentry.data),
+            }
         else:
             suggested = {}
 
@@ -193,12 +211,11 @@ class RoomSubentryFlow(ConfigSubentryFlow):
         self, entry: ConfigEntry, step_id: str, user_input: dict[str, Any]
     ) -> dict[str, str]:
         errors: dict[str, str] = {}
-        thermostats = user_input.get(CONF_THERMOSTATS)
-        external = user_input.get(CONF_EXTERNAL_HEATING, False)
-        if not thermostats and not external:
-            errors[CONF_THERMOSTATS] = "no_thermostat"
-        if thermostats and not user_input.get(CONF_SCHEDULE):
-            errors[CONF_SCHEDULE] = "schedule_required"
+        if user_input[CONF_HEATING_TYPE] != HEATING_EXTERNAL:
+            if not user_input.get(CONF_THERMOSTATS):
+                errors[CONF_THERMOSTATS] = "no_thermostat"
+            if not user_input.get(CONF_SCHEDULE):
+                errors[CONF_SCHEDULE] = "schedule_required"
 
         name = user_input[CONF_NAME].strip()
         if not name:

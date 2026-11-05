@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HeatPilotConfigEntry
-from .const import ROOM_FEATURES
+from .const import ROOM_FEATURES, ROOM_FEATURES_EXTERNAL
 from .coordinator import HeatPilotCoordinator
 from .entity import HeatPilotEntity
 
@@ -27,13 +27,14 @@ async def async_setup_entry(
             PeriodPauseSwitch(coordinator),
         ]
     )
-    for room_id in coordinator.rooms:
+    for room_id, room in coordinator.rooms.items():
+        # A room heated only outside Home Assistant has just the door warning.
+        features = ROOM_FEATURES if room.thermostats else ROOM_FEATURES_EXTERNAL
         entities: list[SwitchEntity] = [
-            RoomFeatureSwitch(coordinator, room_id, feature)
-            for feature in ROOM_FEATURES
+            RoomFeatureSwitch(coordinator, room_id, feature) for feature in features
         ]
-        entities.append(SkipSetbackSwitch(coordinator, room_id))
-        if coordinator.rooms[room_id].thermostats:
+        if room.thermostats:
+            entities.append(SkipSetbackSwitch(coordinator, room_id))
             entities.append(BoostSwitch(coordinator, room_id))
         if coordinator.rooms[room_id].schedule:
             entities.append(PlanPauseSwitch(coordinator, room_id))
@@ -184,7 +185,7 @@ class SkipSetbackSwitch(HeatPilotEntity, SwitchEntity):
 
 
 class NightSetbackSwitch(HeatPilotEntity, SwitchEntity):
-    """Lower a room without schedule to its setback temperature every night."""
+    """Keep the room at its setback temperature during the global night window."""
 
     _attr_icon = "mdi:weather-night"
 
@@ -196,7 +197,7 @@ class NightSetbackSwitch(HeatPilotEntity, SwitchEntity):
         return bool(self.coordinator.room_state(self._room_id)["night_setback"])
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_night_setback(self._room_id, enabled=True)
+        await self.coordinator.async_set_night_setback(self._room_id, True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_night_setback(self._room_id, enabled=False)
+        await self.coordinator.async_set_night_setback(self._room_id, False)

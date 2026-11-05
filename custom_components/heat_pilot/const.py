@@ -18,7 +18,14 @@ CONF_WINDOW_SENSORS = "window_sensors"
 CONF_PERSONS = "persons"
 CONF_OPEN_DELAY = "open_delay_minutes"
 CONF_ABSENCE_DELAY = "absence_delay_minutes"
-CONF_EXTERNAL_HEATING = "external_heating"
+CONF_EXTERNAL_HEATING = "external_heating"  # legacy (< 0.14), see heating_type_of
+# How a room is heated: by its thermostats, by something Home Assistant does not
+# control (e.g. underfloor heating), or both.
+CONF_HEATING_TYPE = "heating_type"
+HEATING_THERMOSTAT = "thermostat"
+HEATING_EXTERNAL = "external"
+HEATING_COMBINED = "combined"
+HEATING_TYPES = (HEATING_THERMOSTAT, HEATING_EXTERNAL, HEATING_COMBINED)
 # Persons whose phones get this room's door/ventilation messages (empty = all).
 CONF_NOTIFY_PERSONS = "notify_persons"
 
@@ -30,9 +37,17 @@ DEFAULT_COMFORT_TEMP = 21.0
 DEFAULT_SETBACK_TEMP = 17.0
 DEFAULT_FROST_TEMP = 7.0
 DEFAULT_MAX_TEMP = 24.0
-# Night setback for rooms without schedule: the daily time at which the room
-# is lowered to its setback temperature (stored as "HH:MM").
-DEFAULT_NIGHT_SETBACK_TIME = "22:00"
+# Forced night setback: two global night windows (stored as "HH:MM"). A night
+# belongs to the day on which it begins; Friday and Saturday nights use the
+# "weekend" times, all others the "weekday" times.
+NIGHT_TIME_KEYS = ("weekday_start", "weekday_end", "weekend_start", "weekend_end")
+DEFAULT_NIGHT_TIMES = {
+    "weekday_start": "20:30",
+    "weekday_end": "05:00",
+    "weekend_start": "21:30",
+    "weekend_end": "05:00",
+}
+MAX_NIGHT_SHIFT_HOURS = 12
 DEFAULT_PERIOD_START = (10, 1)  # 1 October
 DEFAULT_PERIOD_END = (4, 30)  # 30 April
 
@@ -66,6 +81,9 @@ ROOM_FEATURES = (
     FEATURE_ABSENCE_SHUTDOWN,
     FEATURE_MAX_LIMIT,
 )
+
+# Rooms heated only outside Home Assistant have no thermostat: only these apply.
+ROOM_FEATURES_EXTERNAL = (FEATURE_DOOR_WARNING,)
 
 # Features that are off until the user switches them on.
 FEATURES_DEFAULT_OFF = (
@@ -113,3 +131,13 @@ SIGNAL_ALERTS_UPDATED = f"{DOMAIN}_alerts_updated_" + "{}"
 # Lovelace card, served from the integration's www folder.
 CARD_FILENAME = "heat-pilot-card.js"
 CARD_URL_PATH = f"/{DOMAIN}_static/{CARD_FILENAME}"
+
+
+def heating_type_of(data: dict) -> str:
+    """Heating type of a room's subentry data (migrates the pre-0.14 checkbox)."""
+    value = data.get(CONF_HEATING_TYPE)
+    if value in HEATING_TYPES:
+        return value
+    if not data.get(CONF_THERMOSTATS):
+        return HEATING_EXTERNAL
+    return HEATING_COMBINED if data.get(CONF_EXTERNAL_HEATING) else HEATING_THERMOSTAT

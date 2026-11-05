@@ -191,7 +191,7 @@ async def test_door_warning_for_externally_heated_room(
     hass: HomeAssistant, sent, freezer: FrozenDateTimeFactory
 ) -> None:
     freezer.move_to("2026-11-10 12:00:00+00:00")
-    await _setup(hass, {**ROOM_DATA, "external_heating": True}, wants_heat=False)
+    await _setup(hass, {**ROOM_DATA, "heating_type": "combined"}, wants_heat=False)
     hass.states.async_set(DOOR, "on")
     await hass.async_block_till_done()
     await _advance(hass, freezer, minutes=30)

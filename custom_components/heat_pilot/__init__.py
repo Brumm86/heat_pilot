@@ -38,6 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.DATETIME,
     Platform.NUMBER,
     Platform.SENSOR,
@@ -166,6 +167,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HeatPilotConfigEntry) ->
         "button", DOMAIN, f"{entry.entry_id}_pair_door_sensor"
     ):
         entity_registry.async_remove(button_id)
+    _prune_room_entities(hass, entry, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     notifier = HeatPilotNotifier(hass, coordinator, dict(entry.options))
     notifier.async_start()
@@ -173,6 +175,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: HeatPilotConfigEntry) ->
     # Adding, changing or removing a room (subentry) reloads the entry.
     entry.async_on_unload(entry.add_update_listener(_async_reload_on_update))
     return True
+
+
+_ENTITY_DOMAINS = ("switch", "number", "sensor", "button", "time", "binary_sensor")
+# Entities a room only has with thermostats (everything but the door warning).
+_THERMOSTAT_ONLY_KEYS = (
+    "comfort", "setback", "skip_setback", "boost", "boost_minutes", "plan_paused",
+    "night_setback", "next_night_setback", "night_setback_later", "setpoint",
+    "door_warning_setback_only", "door_warning_heating_only", "opening_shutdown",
+    "absence_shutdown", "max_limit",
+)
+
+
+def _prune_room_entities(
+    hass: HomeAssistant, entry: HeatPilotConfigEntry, coordinator: HeatPilotCoordinator
+) -> None:
+    """Remove registry entries of room entities that no longer exist."""
+    registry = er.async_get(hass)
+    for room_id, room in coordinator.rooms.items():
+        stale = {"night_setback_time"}  # per-room night time, gone since 0.14
+        if not room.thermostats:
+            stale |= set(_THERMOSTAT_ONLY_KEYS)
+        elif room.schedule is None:
+            stale.add("plan_paused")
+        for key in stale:
+            for domain in _ENTITY_DOMAINS:
+                if entity_id := registry.async_get_entity_id(
+                    domain, DOMAIN, f"{entry.entry_id}_{room_id}_{key}"
+                ):
+                    registry.async_remove(entity_id)
 
 
 async def _async_reload_on_update(hass: HomeAssistant, entry: HeatPilotConfigEntry) -> None:

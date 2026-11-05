@@ -6,7 +6,7 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 - Zeitplangesteuerte Temperatur mit Absenkung (vorhandener `schedule`-Helfer: an = Komfort, aus = Absenkung)
 - „Absenkung überspringen“ pro Raum (einmalig, endet automatisch zum nächsten Komfortbeginn)
-- „Nachtabsenkung“ für Räume ohne Zeitplan: Zu einer einstellbaren Uhrzeit (Standard 22:00) wird der Raum täglich auf die Absenktemperatur gesetzt, damit ein von Hand beheizter Raum nicht die ganze Nacht durchheizt (Raumschalter, standardmäßig aus). Ein ausgeschaltetes Thermostat bleibt aus; verpasste Absenkungen werden nicht nachgeholt
+- „Erzwungene Nachtabsenkung“ (Raumschalter, standardmäßig aus; jeder Raum mit Thermostat, mit oder ohne Zeitplan): In den globalen Nachtzeiten (Standard So–Do-Nächte 20:30–05:00, Fr+Sa-Nächte 21:30–05:00) bleibt der Raum auf der Absenktemperatur; eine Handeinstellung darüber wird sofort zurückgenommen, eine niedrigere bleibt. Eine Nacht gehört zu dem Tag, an dem sie beginnt. Ein Zeitplan in der Komfortphase geht vor, „Absenkung überspringen“ hebt die Nacht auf. Ein ausgeschaltetes Thermostat bleibt aus. Der Button „Absenkung eine Stunde später“ verschiebt den Beginn der laufenden/nächsten Nacht je Klick um eine Stunde (Sensor „Nächste Absenkung“ zeigt den Beginn)
 - „Boost“ pro Raum: volle Heizleistung für eine einstellbare Zeit (Standard 30 Minuten), danach zurück zum Zeitplan
 - Abschalten bei offener Tür oder offenem Fenster (Wartezeit einstellbar)
 - Abschalten, wenn alle zugeordneten Personen länger abwesend sind
@@ -36,9 +36,11 @@ Zentrale, raumweise Heizungssteuerung für Home Assistant. Heat Pilot entscheide
 
 ## Raum-Einstellungen
 
-Thermostate, Zeitplan (nur mit Thermostaten nötig), Tür- und Fenstersensoren, Personen, Empfänger der Tür-/Lüftungsmeldungen (Personen mit Handy; leer = alle), Wartezeit bei offener Tür/Fenster (Standard 3 min), Wartezeit bei Abwesenheit (Standard 15 min).
+Beheizung (Thermostat / Anderweitig / Kombiniert), Thermostate und Zeitplan (nur bei Thermostat und Kombiniert nötig), Tür- und Fenstersensoren, Personen, Empfänger der Tür-/Lüftungsmeldungen (Personen mit Handy; leer = alle), Wartezeit bei offener Tür/Fenster (Standard 3 min), Wartezeit bei Abwesenheit (Standard 15 min).
 
-**Raum wird anders beheizt** (z. B. Fußbodenheizung, die in Home Assistant nicht abgebildet ist): Mit dieser Option wird die Türwarnung auch ausgelöst, wenn der Raum heute nicht über ein Thermostat geheizt hat. Ein Raum ganz ohne Thermostat gilt automatisch als anders beheizt; dann reichen Name und Türsensor(en).
+**Beheizung:** „Thermostat“ (nur über Thermostate), „Anderweitig“ (z. B. Fußbodenheizung, die in Home Assistant nicht abgebildet ist; der Raum hat keine Thermostate, keinen Zeitplan und nur die Türwarnung als Raumschalter) oder „Kombiniert“ (Thermostat und anderweitig). Bei „Anderweitig“ und „Kombiniert“ wird die Türwarnung auch ausgelöst, wenn der Raum heute nicht über ein Thermostat geheizt hat. Räume aus älteren Versionen werden automatisch zugeordnet.
+
+Jeder Raum mit Thermostat hat außerdem den Regler **Solltemperatur**, der den Sollwert aller Thermostate des Raums setzt (ausgeschaltete werden eingeschaltet); die Regeln von Heat Pilot (Maximaltemperatur, offene Tür, Nachtabsenkung) gelten weiter.
 
 ## Lovelace-Karte
 
@@ -54,7 +56,7 @@ Die Abschnitte „Allgemeine Einstellungen“ und die einzelnen Räume sind eink
 
 Einstellungen → Heat Pilot → Konfigurieren: Admin-Handy, Handy je Person (feste Zuordnung), Wartezeiten und Dashboard-Pfad.
 
-- **Türwarnung** (je Raum schaltbar): nach 5 Minuten offener Tür, dann alle 3 Minuten, maximal 3-mal, an die Handys der Personen, die zu Hause sind (je Raum wählbar über „Personen, deren Handys Tür-/Lüftungsmeldungen bekommen“ in den Raum-Einstellungen; ohne Auswahl alle Personen mit Handy). Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen, die als „anders beheizt“ gelten). Verschwindet, sobald die Tür zu ist. Mit dem Raumschalter **Türwarnung nur in der Absenkung** (standardmäßig aus) kommt die Warnung nur, solange der Zeitplan des Raums in der Absenkung ist, z. B. für eine Küche neben einem durchgehend beheizten Raum. Mit dem Raumschalter **Türwarnung nur beim Heizen** (standardmäßig aus) kommt die Warnung nur, solange der Raum auf Komforttemperatur beheizt wird, also der Zeitplan in der Komfortphase ist (oder die Absenkung übersprungen wurde) und weder Abwesenheitsmodus noch Raumabwesenheit die Heizung ändern. Das Abschalten wegen der offenen Tür selbst zählt nicht dagegen. Räume ohne Thermostat haben keine Komfortphase und werden nicht gefiltert. Beide Schalter lassen sich kombinieren.
+- **Türwarnung** (je Raum schaltbar): nach 5 Minuten offener Tür, dann alle 3 Minuten, maximal 3-mal, an die Handys der Personen, die zu Hause sind (je Raum wählbar über „Personen, deren Handys Tür-/Lüftungsmeldungen bekommen“ in den Raum-Einstellungen; ohne Auswahl alle Personen mit Handy). Nur in der Heizperiode und nicht, wenn der Raum aus ist und heute nicht beheizt wurde (außer bei Räumen mit Beheizung „Anderweitig“ oder „Kombiniert“). Verschwindet, sobald die Tür zu ist. Mit dem Raumschalter **Türwarnung nur in der Absenkung** (standardmäßig aus) kommt die Warnung nur, solange der Zeitplan des Raums in der Absenkung ist, z. B. für eine Küche neben einem durchgehend beheizten Raum. Mit dem Raumschalter **Türwarnung nur beim Heizen** (standardmäßig aus) kommt die Warnung nur, solange der Raum auf Komforttemperatur beheizt wird, also der Zeitplan in der Komfortphase ist (oder die Absenkung übersprungen wurde) und weder Abwesenheitsmodus noch Raumabwesenheit die Heizung ändern. Das Abschalten wegen der offenen Tür selbst zählt nicht dagegen. Räume ohne Thermostat haben keine Komfortphase und werden nicht gefiltert. Beide Schalter lassen sich kombinieren.
 - **Lüftungserinnerung**: einmalig, wenn ein Fenster die Heizung abgeschaltet hat und weiterhin offen ist (Standard 15 Minuten).
 - **Störungsmeldungen** (nur Admin-Handy): Tür-/Fenstersensor nicht erreichbar (Standard 30 Minuten) und Thermostat, das mindestens 25 °C misst (Standard: 15 Minuten lang, nur in der Heizperiode; Hinweis auf defektes Ventil). Wiederholung alle 6 Stunden, nur zwischen 08:00 und 22:00.
 
