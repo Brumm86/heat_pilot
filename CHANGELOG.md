@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.0
+
+- Karte neu gestaltet: Der Kopf zeigt Titel und Statuschips (Heizperiode aktiv/inaktiv, Abwesenheit). Jeder Raum ist eine Kachel mit Ist-Temperatur, Solltemperatur, Statussymbol und Farbe (warm = Komfort/Boost, kühl = Absenkung, grau = aus/Heizperiode inaktiv, rot = Tür/Fenster offen). Der Sollwert lässt sich direkt auf der Kachel mit +/− ändern. Ein Tipp auf die Kachel klappt die Details über die volle Breite auf (immer nur ein Raum offen), gruppiert in Temperaturen, Boost, Plan, Tür/Fenster und Schutz; der Raumstatus steht dort auch als Text. Räume ohne Thermostat zeigen den Zustand der Tür/des Fensters.
+- Karte: Die allgemeinen Einstellungen stehen einklappbar unter dem Kopf (nicht mehr zwischen den Räumen) und sind in Heizperiode, Abwesenheit, Grenzwerte und Nachtabsenkung gegliedert. Aktive Meldungen erscheinen als Banner direkt unter dem Kopf.
+- Karte: Fehler beim Aufruf eines Dienstes (z. B. ungültiges Datum) erscheinen als Hinweis in der Karte statt als Browser-Dialog, der die Companion App blockieren konnte. Der Anlernmodus-Hinweis erscheint nur noch, wenn der Dienst erfolgreich war.
+- Karte: Größere Bedienelemente (Touch-Ziele mindestens 44 px) und Farben aus dem aktiven Theme. Entitäten, Dienste und Verhalten der Integration bleiben unverändert.
+
 ## 0.14.0
 
 - Raum-Einstellungen: Die Option „Raum wird anders beheizt“ ist durch die Auswahl **Beheizung** (Thermostat / Anderweitig / Kombiniert) ersetzt. Bestehende Räume werden automatisch zugeordnet (ohne Thermostat: Anderweitig; mit Thermostat und bisheriger Option: Kombiniert; sonst Thermostat). „Anderweitig“ und „Kombiniert“ verhalten sich bei der Türwarnung wie bisher „anders beheizt“. Räume mit „Anderweitig“ haben keine Thermostate und keinen Zeitplan und nur noch den Raumschalter „Türwarnung“; alle übrigen Raumschalter und -zahlen (Abschalten bei Raumabwesenheit, Maximaltemperatur begrenzen, Absenkung überspringen, Abschalten bei offener Tür/Fenster, Türwarnung nur in der Absenkung/beim Heizen, Komfort-/Absenktemperatur, Boost) entfallen für sie; die nicht mehr benötigten Entitäten werden beim Start entfernt.

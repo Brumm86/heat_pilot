@@ -10,6 +10,10 @@
  * The card needs no configuration: it discovers every entity of the
  * integration through the entity/device registry. Optional config:
  *   title: "Heizung"        - card title (default "Heat Pilot")
+ *
+ * Layout: header with status chips, alert banner, collapsible general
+ * settings and one tile per room (current/target temperature, quick +/-).
+ * Tapping a tile opens its details across the full width (one at a time).
  */
 (function () {
   "use strict";
@@ -21,6 +25,7 @@
       expand: "Aufklappen",
       collapse: "Einklappen",
       absence: "Abwesenheitsmodus",
+      absence_chip: "Abwesend",
       return_at: "Rückkehr",
       period: "Heizperiode",
       period_active: "aktiv",
@@ -63,8 +68,20 @@
       edit_plan: "Plan bearbeiten",
       next_change: "Nächster Wechsel",
       open: "offen",
+      closed: "geschlossen",
       current: "Ist",
       target: "Soll",
+      status: "Status",
+      grp_temps: "Temperaturen",
+      grp_boost: "Boost",
+      grp_plan: "Plan",
+      grp_door: "Tür / Fenster",
+      grp_protect: "Schutz",
+      grp_limits: "Grenzwerte",
+      grp_night: "Nachtabsenkung",
+      lower: "Soll senken",
+      raise: "Soll erhöhen",
+      dismiss: "Schließen",
       no_rooms: "Noch keine Räume. Füge sie in den Einstellungen der Integration hinzu.",
       no_entities: "Keine Heat-Pilot-Entitäten gefunden.",
     },
@@ -74,6 +91,7 @@
       expand: "Expand",
       collapse: "Collapse",
       absence: "Absence mode",
+      absence_chip: "Away",
       return_at: "Return",
       period: "Heating period",
       period_active: "active",
@@ -116,20 +134,28 @@
       edit_plan: "Edit schedule",
       next_change: "Next change",
       open: "open",
+      closed: "closed",
       current: "Now",
       target: "Target",
+      status: "Status",
+      grp_temps: "Temperatures",
+      grp_boost: "Boost",
+      grp_plan: "Schedule",
+      grp_door: "Door / window",
+      grp_protect: "Protection",
+      grp_limits: "Limits",
+      grp_night: "Night setback",
+      lower: "Lower target",
+      raise: "Raise target",
+      dismiss: "Dismiss",
       no_rooms: "No rooms yet. Add them on the integration's settings page.",
       no_entities: "No Heat Pilot entities found.",
     },
   };
 
-  var ROOM_SWITCHES = [
-    "skip_setback",
-    "plan_paused",
-    "absence_shutdown",
-    "max_limit",
-    "night_setback",
-  ];
+  // Switches per detail group (a group is hidden when none of them exists).
+  var PLAN_SWITCHES = ["skip_setback", "plan_paused", "night_setback"];
+  var PROTECT_SWITCHES = ["absence_shutdown", "max_limit"];
 
   // Everything that belongs to a door/window sensor; shown only for rooms that
   // have such a sensor (they own the "opening" entity).
@@ -140,7 +166,7 @@
     "opening_shutdown",
   ];
 
-  // Room status shown as an icon only (the text is the tooltip).
+  // Room status shown as an icon (the text is the tooltip and shown in the details).
   var STATUS_ICONS = {
     outside_period: "mdi:radiator-off",
     absence_mode: "mdi:home-export-outline",
@@ -152,6 +178,20 @@
     boost: "mdi:fire",
     plan_paused: "mdi:calendar-remove-outline",
     night_setback: "mdi:weather-night",
+  };
+
+  // Tile colour per status: heat (warm), night (cool), off (grey), warn (red).
+  var STATUS_TONE = {
+    comfort: "heat",
+    boost: "heat",
+    setback: "night",
+    night_setback: "night",
+    plan_paused: "night",
+    comfort_skipped: "night",
+    outside_period: "off",
+    absence_mode: "off",
+    room_absent: "off",
+    opening: "warn",
   };
 
   function esc(value) {
@@ -167,9 +207,14 @@
     return isNaN(n) ? null : n;
   }
 
+  function fmtNum(value) {
+    var n = num(value);
+    return n === null ? "–" : n.toFixed(1).replace(".", ",");
+  }
+
   function fmtTemp(value) {
     var n = num(value);
-    return n === null ? "–" : n.toFixed(1).replace(".", ",") + " °C";
+    return n === null ? "–" : fmtNum(n) + " °C";
   }
 
   function fmtMinutes(value) {
@@ -177,49 +222,91 @@
     return n === null ? "–" : Math.round(n) + " min";
   }
 
+  function icon(name) {
+    return '<ha-icon icon="' + esc(name) + '"></ha-icon>';
+  }
+
   var STYLE =
     ":host{display:block}" +
-    "ha-card{padding:12px 16px 16px}" +
-    "h2{margin:0 0 8px;font-size:1.3em;font-weight:500}" +
-    "h3{margin:0;font-size:1.1em;font-weight:500}" +
-    ".sec{border-top:1px solid var(--divider-color);padding:4px 0;margin-top:8px}" +
-    ".head{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;" +
-    "gap:8px;min-height:44px;padding:0;background:none;border:none;color:inherit;font:inherit;" +
-    "text-align:left;cursor:pointer}" +
-    ".head .title{display:flex;align-items:center;gap:8px;min-width:0}" +
-    ".head .chev{display:inline-block;transition:transform .15s;color:var(--secondary-text-color)}" +
-    ".head[aria-expanded=true] .chev{transform:rotate(90deg)}" +
-    ".body{padding:0 0 8px}" +
-    ".row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;flex-wrap:wrap}" +
-    ".sub{color:var(--secondary-text-color);font-size:.9em}" +
-    ".chip{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.85em;background:var(--secondary-background-color)}" +
+    "ha-card{padding:16px;--hp-heat:var(--state-climate-heat-color,#ef6c00);" +
+    "--hp-night:var(--state-climate-cool-color,#3f7fd9);--hp-off:var(--disabled-text-color,#9e9e9e);" +
+    "--hp-warn:var(--error-color,#e53935);--hp-radius:14px}" +
+    "button{font:inherit;color:inherit}" +
+    "h2{margin:0;font-size:1.3em;font-weight:500;line-height:1.2}" +
+    "h3{margin:0;font-size:1em;font-weight:500}" +
+    ".bar{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;margin-bottom:12px}" +
+    ".chips{display:flex;gap:6px;flex-wrap:wrap}" +
+    ".chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:.85em;" +
+    "background:var(--secondary-background-color);color:var(--primary-text-color);--mdc-icon-size:16px}" +
     ".chip.on{background:var(--primary-color);color:var(--text-primary-color,#fff)}" +
-    ".chip.warn{background:var(--error-color,#e53935);color:#fff}" +
-    ".stepper{display:flex;align-items:center;gap:6px}" +
-    ".stepper button{width:34px;height:34px;border-radius:50%;border:1px solid var(--divider-color);" +
-    "background:var(--card-background-color);color:var(--primary-text-color);font-size:1.2em;cursor:pointer;line-height:1}" +
-    ".stepper .v{min-width:64px;text-align:center;font-variant-numeric:tabular-nums}" +
-    "button.link{background:none;border:1px solid var(--primary-color);color:var(--primary-color);" +
-    "border-radius:16px;padding:6px 14px;cursor:pointer;font:inherit}" +
-    "button.primary{background:var(--primary-color);color:var(--text-primary-color,#fff);border:none;" +
-    "border-radius:16px;padding:6px 14px;cursor:pointer;font:inherit}" +
-    ".grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}" +
-    ".temps{display:flex;gap:16px;flex-wrap:wrap}" +
-    ".editor{padding:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}" +
-    ".editor label{display:flex;flex-direction:column;font-size:.85em;gap:2px}" +
-    ".editor input,.editor select{font:inherit;padding:6px;border:1px solid var(--divider-color);" +
-    "border-radius:6px;background:var(--card-background-color);color:var(--primary-text-color)}" +
-    ".actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}" +
-    ".alerts{border:1px solid var(--error-color,#e53935);border-radius:8px;padding:6px 12px;margin:8px 0}" +
-    ".alerts h3{color:var(--error-color,#e53935)}" +
-    ".alert{padding:6px 0;border-top:1px solid var(--divider-color)}" +
+    ".chip.warn{background:var(--hp-warn);color:#fff}" +
+    ".sub{color:var(--secondary-text-color);font-size:.9em}" +
+    // errors and alerts
+    ".error{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 12px;padding:8px 12px;" +
+    "border-radius:var(--hp-radius);background:var(--hp-warn);color:#fff}" +
+    ".error button{background:none;border:1px solid #fff;border-radius:12px;color:#fff;padding:2px 10px;cursor:pointer}" +
+    ".alerts{border:1px solid var(--hp-warn);border-left-width:5px;border-radius:var(--hp-radius);padding:8px 12px;margin:0 0 12px}" +
+    ".alerts h3{color:var(--hp-warn);display:flex;align-items:center;gap:6px;--mdc-icon-size:20px}" +
+    ".alert{padding:8px 0;border-top:1px solid var(--divider-color)}" +
     ".alert:first-of-type{border-top:none}" +
     ".alert b{display:block}" +
-    ".empty{padding:16px 0;color:var(--secondary-text-color)}" +
-    ".icon{display:inline-flex;align-items:center;--mdc-icon-size:22px;color:var(--primary-color)}" +
-    ".icon.warn{color:var(--error-color,#e53935)}" +
+    // general settings
+    ".gbtn{width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;" +
+    "min-height:48px;padding:0 12px;margin-bottom:12px;background:var(--secondary-background-color);border:none;" +
+    "border-radius:var(--hp-radius);cursor:pointer;text-align:left;--mdc-icon-size:22px}" +
+    ".gbtn .t{display:flex;align-items:center;gap:10px}" +
+    ".chev{display:inline-flex;transition:transform .15s;color:var(--secondary-text-color)}" +
+    "[aria-expanded=true] .chev{transform:rotate(180deg)}" +
+    ".panel{margin:-4px 0 12px;padding:4px 12px 8px;border:1px solid var(--divider-color);border-radius:var(--hp-radius)}" +
+    ".groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 28px}" +
+    ".group{padding-bottom:6px}" +
+    ".gtitle{margin:12px 0 2px;font-size:.78em;font-weight:500;letter-spacing:.06em;text-transform:uppercase;" +
+    "color:var(--secondary-text-color)}" +
+    // rows and controls
+    ".row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;flex-wrap:wrap}" +
+    ".stepper{display:flex;align-items:center;gap:6px}" +
+    ".stepper .v{min-width:70px;text-align:center;font-variant-numeric:tabular-nums}" +
+    ".sbtn{width:44px;height:44px;flex:none;display:inline-flex;align-items:center;justify-content:center;" +
+    "border-radius:50%;border:1px solid var(--divider-color);background:var(--card-background-color);" +
+    "color:var(--primary-text-color);font-size:1.4em;line-height:1;cursor:pointer;padding:0}" +
+    ".sbtn:active{background:var(--secondary-background-color)}" +
+    "button.link{min-height:36px;background:none;border:1px solid var(--primary-color);color:var(--primary-color);" +
+    "border-radius:18px;padding:4px 14px;cursor:pointer}" +
+    "button.primary{min-height:36px;background:var(--primary-color);color:var(--text-primary-color,#fff);border:none;" +
+    "border-radius:18px;padding:4px 16px;cursor:pointer}" +
+    ".editor{padding:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}" +
+    ".editor label{display:flex;flex-direction:column;font-size:.85em;gap:2px}" +
+    ".editor input,.editor select{font:inherit;padding:8px;border:1px solid var(--divider-color);" +
+    "border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color)}" +
+    ".actions{display:flex;gap:8px;justify-content:flex-end;margin:6px 0}" +
     ".slider{display:flex;align-items:center;gap:10px;flex:1;min-width:180px;justify-content:flex-end}" +
-    ".slider ha-slider,.slider input{flex:1;min-width:120px}";
+    ".slider ha-slider,.slider input{flex:1;min-width:120px}" +
+    ".slider .v{min-width:64px;text-align:right;font-variant-numeric:tabular-nums}" +
+    ".empty{padding:16px 0;color:var(--secondary-text-color)}" +
+    // room tiles
+    ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}" +
+    ".tile{--accent:var(--hp-off);box-sizing:border-box;display:flex;flex-direction:column;min-width:0;" +
+    "border:1px solid var(--divider-color);border-top:4px solid var(--accent);border-radius:var(--hp-radius);" +
+    "background:var(--card-background-color);overflow:hidden}" +
+    ".tile.tone-heat{--accent:var(--hp-heat)}" +
+    ".tile.tone-night{--accent:var(--hp-night)}" +
+    ".tile.tone-warn{--accent:var(--hp-warn)}" +
+    ".tile.tone-idle{--accent:var(--primary-color)}" +
+    ".tile.open{grid-column:1/-1}" +
+    ".thead{display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;box-sizing:border-box;" +
+    "padding:10px 12px 6px;background:none;border:none;text-align:left;cursor:pointer}" +
+    ".trow{display:flex;align-items:center;justify-content:space-between;gap:6px}" +
+    ".tname{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".ticons{display:inline-flex;gap:4px;flex:none;--mdc-icon-size:20px;color:var(--accent)}" +
+    ".ticons .warn{color:var(--hp-warn)}" +
+    ".tcur{font-size:1.9em;font-weight:300;line-height:1.15;font-variant-numeric:tabular-nums}" +
+    ".tcur small{font-size:.45em;margin-left:2px;color:var(--secondary-text-color)}" +
+    ".tcur.text{font-size:1.1em;font-weight:400;padding:6px 0;display:flex;align-items:center;gap:6px;--mdc-icon-size:22px}" +
+    ".tset{color:var(--secondary-text-color);font-size:.85em}" +
+    ".tctl{display:flex;justify-content:space-between;padding:4px 12px 10px}" +
+    ".detail{padding:0 12px 10px;border-top:1px solid var(--divider-color)}" +
+    ".info{display:flex;gap:4px 16px;flex-wrap:wrap;padding:10px 0 0;color:var(--secondary-text-color);font-size:.9em}" +
+    ".info span{display:inline-flex;align-items:center;gap:4px;--mdc-icon-size:18px}";
 
   class HeatPilotCard extends HTMLElement {
     constructor() {
@@ -230,9 +317,10 @@
       this._sig = "";
       this._periodOpen = false;
       this._periodDraft = null;
-      this._bound = false;
-      // Collapsed by default: only keys set to true are open.
-      this._open = {};
+      this._globalOpen = false;
+      this._room = null; // device id of the one open room tile
+      this._error = "";
+      this._errorTimer = null;
     }
 
     setConfig(config) {
@@ -246,7 +334,7 @@
     }
 
     getCardSize() {
-      return 10;
+      return 8;
     }
 
     set hass(hass) {
@@ -361,7 +449,33 @@
       return st.state;
     }
 
-    // ------------------------------------------------------------- render
+    _fmtClock(value) {
+      var d = new Date(value);
+      if (isNaN(d.getTime())) {
+        return String(value);
+      }
+      try {
+        return d.toLocaleTimeString(this._hass.language, { hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        return String(value);
+      }
+    }
+
+    _fmtTime(value) {
+      var d = new Date(value);
+      if (isNaN(d.getTime())) {
+        return String(value);
+      }
+      try {
+        return d.toLocaleString(this._hass.language, {
+          weekday: "short", hour: "2-digit", minute: "2-digit",
+        });
+      } catch (e) {
+        return d.toLocaleString();
+      }
+    }
+
+    // ------------------------------------------------------ render pieces
 
     _stepper(entityId, label, format) {
       var st = this._state(entityId);
@@ -373,9 +487,9 @@
       return (
         '<div class="row"><span>' + esc(label) + "</span>" +
         '<span class="stepper">' +
-        '<button data-act="step" data-ent="' + esc(entityId) + '" data-dir="-1">−</button>' +
+        '<button class="sbtn" data-act="step" data-ent="' + esc(entityId) + '" data-dir="-1" aria-label="−">−</button>' +
         '<span class="v">' + (unavailable ? "–" : fmt(st.state)) + "</span>" +
-        '<button data-act="step" data-ent="' + esc(entityId) + '" data-dir="1">+</button>' +
+        '<button class="sbtn" data-act="step" data-ent="' + esc(entityId) + '" data-dir="1" aria-label="+">+</button>' +
         "</span></div>"
       );
     }
@@ -392,91 +506,8 @@
       );
     }
 
-    /** Clickable section header; chips (already escaped HTML) sit on the right. */
-    _head(key, titleHtml, chipsHtml) {
-      var open = !!this._open[key];
-      return (
-        '<button class="head" data-act="collapse" data-key="' + esc(key) + '" aria-expanded="' +
-        (open ? "true" : "false") + '" title="' + esc(this._t(open ? "collapse" : "expand")) + '">' +
-        '<span class="title"><span class="chev">&#9656;</span>' + titleHtml + "</span>" +
-        "<span>" + (chipsHtml || "") + "</span></button>"
-      );
-    }
-
-    _renderGlobal(g) {
-      var html = "";
-      var period = this._state(g.heating_period);
-      if (period) {
-        var a = period.attributes;
-        var range = a.start_day + "." + a.start_month + ". – " + a.end_day + "." + a.end_month + ".";
-        var active = period.state === "active";
-        html +=
-          '<div class="row"><span>' + esc(this._t("period")) + " " +
-          '<span class="chip ' + (active ? "on" : "") + '">' +
-          esc(active ? this._t("period_active") : this._t("period_inactive")) +
-          '</span> <span class="sub">' + esc(range) + "</span></span>" +
-          '<button class="link" data-act="period-edit">' + esc(this._t("period_edit")) + "</button></div>";
-        if (this._periodOpen) {
-          var d = this._periodDraft || {
-            start_month: a.start_month,
-            start_day: a.start_day,
-            end_month: a.end_month,
-            end_day: a.end_day,
-          };
-          var self = this;
-          var field = function (key, max) {
-            return (
-              "<label>" + esc(self._t(key)) +
-              '<input type="number" inputmode="numeric" min="1" max="' + max + '" data-field="' + key +
-              '" value="' + esc(d[key]) + '"></label>'
-            );
-          };
-          html +=
-            '<div class="editor">' +
-            field("start_day", 31) + field("start_month", 12) +
-            field("end_day", 31) + field("end_month", 12) +
-            '</div><div class="actions">' +
-            '<button class="link" data-act="period-cancel">' + esc(this._t("period_cancel")) + "</button>" +
-            '<button class="primary" data-act="period-save">' + esc(this._t("period_save")) + "</button></div>";
-        }
-      }
-      html += this._toggle(g.period_override, this._t("period_override"));
-      html += this._toggle(g.period_paused, this._t("period_paused"));
-      html += this._toggle(g.absence_mode, this._t("absence"));
-      var absence = this._state(g.absence_mode);
-      var ret = absence && absence.state === "on" ? this._state(g.return_at) : null;
-      if (ret) {
-        var value = ret.state && ret.state !== "unknown" && ret.state !== "unavailable"
-          ? ret.state.replace(" ", "T").slice(0, 16) : "";
-        html +=
-          '<div class="row"><span>' + esc(this._t("return_at")) + "</span>" +
-          '<span data-slot="return" data-ent="' + esc(g.return_at) + '" data-value="' + esc(value) +
-          '"></span></div>';
-      }
-      html += this._stepper(g.frost_temp, this._t("frost_temp"));
-      html += this._stepper(g.max_temp, this._t("max_temp"));
-      html += this._nightRow(g, "weekday") + this._nightRow(g, "weekend");
-      return html;
-    }
-
-    /** One global night window: start and end, each opens its time dialog. */
-    _nightRow(g, kind) {
-      var start = this._state(g["night_" + kind + "_start"]);
-      var end = this._state(g["night_" + kind + "_end"]);
-      if (!start || !end) {
-        return "";
-      }
-      var link = function (st, id) {
-        return (
-          '<button class="link" data-act="plan" data-ent="' + esc(id) + '">' +
-          esc(String(st.state).slice(0, 5)) + "</button>"
-        );
-      };
-      return (
-        '<div class="row"><span>' + esc(this._t("night_" + kind)) + "</span><span>" +
-        link(start, g["night_" + kind + "_start"]) + " " + esc(this._t("night_to")) + " " +
-        link(end, g["night_" + kind + "_end"]) + "</span></div>"
-      );
+    _group(title, inner) {
+      return inner ? '<div class="group"><div class="gtitle">' + esc(title) + "</div>" + inner + "</div>" : "";
     }
 
     /** Slider for the room's setpoint (HA's slider, a native range as fallback). */
@@ -502,6 +533,26 @@
       );
     }
 
+    /** One global night window: start and end, each opens its time dialog. */
+    _nightRow(g, kind) {
+      var start = this._state(g["night_" + kind + "_start"]);
+      var end = this._state(g["night_" + kind + "_end"]);
+      if (!start || !end) {
+        return "";
+      }
+      var link = function (st, id) {
+        return (
+          '<button class="link" data-act="plan" data-ent="' + esc(id) + '">' +
+          esc(String(st.state).slice(0, 5)) + "</button>"
+        );
+      };
+      return (
+        '<div class="row"><span>' + esc(this._t("night_" + kind)) + "</span><span>" +
+        link(start, g["night_" + kind + "_start"]) + " " + esc(this._t("night_to")) + " " +
+        link(end, g["night_" + kind + "_end"]) + "</span></div>"
+      );
+    }
+
     /** Alerts that were sent to the phones and whose cause still exists. */
     _renderAlerts(entityId) {
       var st = this._state(entityId);
@@ -510,7 +561,8 @@
         return "";
       }
       var self = this;
-      var html = '<div class="alerts"><h3>' + esc(this._t("alerts")) + " (" + alerts.length + ")</h3>";
+      var html = '<div class="alerts"><h3>' + icon("mdi:alert-circle-outline") +
+        esc(this._t("alerts")) + " (" + alerts.length + ")</h3>";
       alerts.forEach(function (a) {
         html +=
           '<div class="alert"><b>' + esc(a.title) + "</b>" + esc(a.message) +
@@ -525,99 +577,225 @@
       return html + "</div>";
     }
 
-    _fmtClock(value) {
-      var d = new Date(value);
-      if (isNaN(d.getTime())) {
-        return String(value);
+    _renderHeader(g) {
+      var chips = "";
+      var period = this._state(g.heating_period);
+      if (period) {
+        var active = period.state === "active";
+        chips +=
+          '<span class="chip ' + (active ? "on" : "") + '">' + icon(active ? "mdi:radiator" : "mdi:radiator-off") +
+          esc(this._t("period") + " " + this._t(active ? "period_active" : "period_inactive")) + "</span>";
       }
-      try {
-        return d.toLocaleTimeString(this._hass.language, { hour: "2-digit", minute: "2-digit" });
-      } catch (e) {
-        return String(value);
+      var absence = this._state(g.absence_mode);
+      if (absence && absence.state === "on") {
+        chips += '<span class="chip warn">' + icon("mdi:home-export-outline") + esc(this._t("absence_chip")) + "</span>";
       }
+      return '<div class="bar"><h2>' + esc(this._config.title || this._t("title")) +
+        '</h2><div class="chips">' + chips + "</div></div>";
     }
 
     _renderGlobalSection(g) {
+      var open = this._globalOpen;
+      var html =
+        '<button class="gbtn" data-act="global" aria-expanded="' + (open ? "true" : "false") +
+        '" title="' + esc(this._t(open ? "collapse" : "expand")) + '">' +
+        '<span class="t">' + icon("mdi:cog-outline") + "<h3>" + esc(this._t("general")) + "</h3></span>" +
+        '<span class="chev">' + icon("mdi:chevron-down") + "</span></button>";
+      if (!open) {
+        return html;
+      }
+      return html + '<div class="panel"><div class="groups">' + this._renderGlobal(g) + "</div></div>";
+    }
+
+    _renderGlobal(g) {
+      var self = this;
+      var periodHtml = "";
       var period = this._state(g.heating_period);
-      var chips = "";
       if (period) {
+        var a = period.attributes;
+        var range = a.start_day + "." + a.start_month + ". – " + a.end_day + "." + a.end_month + ".";
         var active = period.state === "active";
-        chips =
-          '<span class="chip ' + (active ? "on" : "") + '">' + esc(this._t("period") + ": " +
-          this._t(active ? "period_active" : "period_inactive")) + "</span>";
+        periodHtml +=
+          '<div class="row"><span><span class="chip ' + (active ? "on" : "") + '">' +
+          esc(active ? this._t("period_active") : this._t("period_inactive")) +
+          '</span> <span class="sub">' + esc(range) + "</span></span>" +
+          '<button class="link" data-act="period-edit">' + esc(this._t("period_edit")) + "</button></div>";
+        if (this._periodOpen) {
+          var d = this._periodDraft || {
+            start_month: a.start_month,
+            start_day: a.start_day,
+            end_month: a.end_month,
+            end_day: a.end_day,
+          };
+          var field = function (key, max) {
+            return (
+              "<label>" + esc(self._t(key)) +
+              '<input type="number" inputmode="numeric" min="1" max="' + max + '" data-field="' + key +
+              '" value="' + esc(d[key]) + '"></label>'
+            );
+          };
+          periodHtml +=
+            '<div class="editor">' +
+            field("start_day", 31) + field("start_month", 12) +
+            field("end_day", 31) + field("end_month", 12) +
+            '</div><div class="actions">' +
+            '<button class="link" data-act="period-cancel">' + esc(this._t("period_cancel")) + "</button>" +
+            '<button class="primary" data-act="period-save">' + esc(this._t("period_save")) + "</button></div>";
+        }
       }
-      var html = '<div class="sec">' +
-        this._head("global", "<h3>" + esc(this._t("general")) + "</h3>", chips);
-      if (this._open.global) {
-        html += '<div class="body">' + this._renderGlobal(g) + "</div>";
+      periodHtml += this._toggle(g.period_override, this._t("period_override"));
+      periodHtml += this._toggle(g.period_paused, this._t("period_paused"));
+
+      var absenceHtml = this._toggle(g.absence_mode, this._t("absence"));
+      var absence = this._state(g.absence_mode);
+      var ret = absence && absence.state === "on" ? this._state(g.return_at) : null;
+      if (ret) {
+        var value = ret.state && ret.state !== "unknown" && ret.state !== "unavailable"
+          ? ret.state.replace(" ", "T").slice(0, 16) : "";
+        absenceHtml +=
+          '<div class="row"><span>' + esc(this._t("return_at")) + "</span>" +
+          '<span data-slot="return" data-ent="' + esc(g.return_at) + '" data-value="' + esc(value) +
+          '"></span></div>';
       }
-      return html + "</div>";
+
+      var limits = this._stepper(g.frost_temp, this._t("frost_temp")) +
+        this._stepper(g.max_temp, this._t("max_temp"));
+      var night = this._nightRow(g, "weekday") + this._nightRow(g, "weekend");
+
+      return (
+        this._group(this._t("period"), periodHtml) +
+        this._group(this._t("absence"), absenceHtml) +
+        this._group(this._t("grp_limits"), limits) +
+        this._group(this._t("grp_night"), night)
+      );
+    }
+
+    /** Mean of the numeric values, or null. */
+    _mean(values) {
+      var list = values.filter(function (v) {
+        return v !== null;
+      });
+      if (!list.length) {
+        return null;
+      }
+      return (
+        list.reduce(function (a, b) {
+          return a + b;
+        }, 0) / list.length
+      );
     }
 
     _renderRoom(room, periodActive) {
       var e = room.ents;
       var hass = this._hass;
+      var self = this;
       var status = this._state(e.status);
       var attrs = status ? status.attributes : {};
-      var thermostat = this._state((attrs.thermostats || [])[0]);
+      var thermostats = (attrs.thermostats || [])
+        .map(function (id) {
+          return self._state(id);
+        })
+        .filter(Boolean);
       var opening = this._state(e.opening);
-      var chips = "";
-      if (opening && opening.state === "on") {
-        chips += '<span class="icon warn" title="' + esc(this._t("open")) +
-          '"><ha-icon icon="mdi:door-open"></ha-icon></span> ';
+      var isOpen = !!opening && opening.state === "on";
+      var open = this._room === room.id;
+
+      var tone = isOpen ? "warn" : (status && STATUS_TONE[status.state]) || (status ? "idle" : "off");
+      var current = this._mean(
+        thermostats.map(function (t) {
+          return num(t.attributes.current_temperature);
+        })
+      );
+      var setpointSt = this._state(e.setpoint);
+      var target = setpointSt && num(setpointSt.state) !== null
+        ? num(setpointSt.state)
+        : this._mean(
+            thermostats.map(function (t) {
+              return num(t.attributes.temperature);
+            })
+          );
+
+      // Header (tap = open/close the details).
+      var icons = "";
+      if (isOpen) {
+        icons += '<span class="warn" title="' + esc(this._t("open")) + '">' + icon("mdi:door-open") + "</span>";
       }
       if (status) {
-        var icon = STATUS_ICONS[status.state] || "mdi:information-outline";
-        chips += '<span class="icon" title="' + esc(this._display(status)) +
-          '"><ha-icon icon="' + esc(icon) + '"></ha-icon></span>';
+        icons += '<span title="' + esc(this._display(status)) + '">' +
+          icon(STATUS_ICONS[status.state] || "mdi:information-outline") + "</span>";
       }
-      var html = '<div class="sec">' + this._head(room.id, "<h3>" + esc(room.name) + "</h3>", chips);
-      if (!this._open[room.id]) {
+      var main;
+      var sub = "";
+      if (thermostats.length) {
+        main = '<span class="tcur">' + fmtNum(current) + "<small>°C</small></span>";
+        sub = '<span class="tset">' + esc(this._t("target")) + " " + fmtTemp(target) + "</span>";
+      } else if (opening) {
+        main = '<span class="tcur text">' + icon(isOpen ? "mdi:door-open" : "mdi:door-closed") +
+          esc(this._t(isOpen ? "open" : "closed")) + "</span>";
+      } else {
+        main = '<span class="tcur">–</span>';
+      }
+      var html =
+        '<div class="tile tone-' + tone + (open ? " open" : "") + '">' +
+        '<button class="thead" data-act="room" data-key="' + esc(room.id) + '" aria-expanded="' +
+        (open ? "true" : "false") + '" title="' + esc(this._t(open ? "collapse" : "expand")) + '">' +
+        '<span class="trow"><span class="tname">' + esc(room.name) + '</span><span class="ticons">' + icons +
+        "</span></span>" + main + sub + "</button>";
+
+      // Quick +/- on the tile.
+      if (setpointSt && thermostats.length) {
+        html +=
+          '<div class="tctl">' +
+          '<button class="sbtn" data-act="step" data-ent="' + esc(e.setpoint) + '" data-dir="-1" aria-label="' +
+          esc(this._t("lower")) + '">−</button>' +
+          '<button class="sbtn" data-act="step" data-ent="' + esc(e.setpoint) + '" data-dir="1" aria-label="' +
+          esc(this._t("raise")) + '">+</button></div>';
+      }
+
+      if (!open) {
         return html + "</div>";
       }
-      html += '<div class="body">';
-      if (thermostat) {
-        html +=
-          '<div class="temps sub"><span>' + esc(this._t("current")) + ": " +
-          fmtTemp(thermostat.attributes.current_temperature) + "</span><span>" +
-          esc(this._t("target")) + ": " + fmtTemp(thermostat.attributes.temperature) + "</span>";
-        if (attrs.next_change) {
-          html += "<span>" + esc(this._t("next_change")) + ": " + esc(this._fmtTime(attrs.next_change)) + "</span>";
-        }
-        html += "</div>";
+
+      // Details across the full width.
+      html += '<div class="detail"><div class="info">';
+      if (status) {
+        html += "<span>" + icon(STATUS_ICONS[status.state] || "mdi:information-outline") +
+          esc(this._display(status)) + "</span>";
       }
-      if ((attrs.thermostats || []).length) {
-        html += this._slider(e.setpoint, this._t("setpoint"));
-        html += this._stepper(e.comfort, this._t("comfort"));
-        html += this._stepper(e.setback, this._t("setback"));
+      if (attrs.next_change) {
+        html += "<span>" + esc(this._t("next_change")) + ": " + esc(this._fmtTime(attrs.next_change)) + "</span>";
       }
+      html += '</div><div class="groups">';
+
+      var temps = "";
+      if (thermostats.length) {
+        temps += this._slider(e.setpoint, this._t("setpoint"));
+        temps += this._stepper(e.comfort, this._t("comfort"));
+        temps += this._stepper(e.setback, this._t("setback"));
+      }
+      html += this._group(this._t("grp_temps"), temps);
+
       var boost = periodActive ? this._state(e.boost) : null;
       if (boost) {
         var until = boost.state === "on" && boost.attributes.ends_at
           ? this._fmtClock(boost.attributes.ends_at) : "";
-        html += this._toggle(
-          e.boost,
-          this._t("boost") + (until ? " (" + this._t("boost_until") + " " + until + ")" : "")
+        html += this._group(
+          this._t("grp_boost"),
+          this._toggle(e.boost, this._t("boost") + (until ? " (" + this._t("boost_until") + " " + until + ")" : "")) +
+            this._stepper(e.boost_minutes, this._t("boost_minutes"), fmtMinutes)
         );
-        html += this._stepper(e.boost_minutes, this._t("boost_minutes"), fmtMinutes);
       }
-      var self = this;
-      ROOM_SWITCHES.forEach(function (key) {
+
+      var plan = "";
+      PLAN_SWITCHES.forEach(function (key) {
         if (e[key]) {
-          html += self._toggle(e[key], self._t(key));
+          plan += self._toggle(e[key], self._t(key));
         }
       });
-      if (e.opening) {
-        DOOR_SWITCHES.forEach(function (key) {
-          if (e[key]) {
-            html += self._toggle(e[key], self._t(key));
-          }
-        });
-      }
       var nextNight = this._state(e.next_night_setback);
       if (nextNight && nextNight.state !== "unavailable" && nextNight.state !== "unknown") {
         var shift = num(nextNight.attributes.shift_hours) || 0;
-        html +=
+        plan +=
           '<div class="row"><span>' + esc(this._t("night_next")) + ": " +
           esc(this._fmtTime(nextNight.state)) + (shift ? " (+" + shift + " h)" : "") + "</span>" +
           (e.night_setback_later
@@ -627,25 +805,31 @@
           "</div>";
       }
       if (attrs.schedule && hass.states[attrs.schedule]) {
-        html +=
+        plan +=
           '<div class="actions"><button class="link" data-act="plan" data-ent="' +
           esc(attrs.schedule) + '" data-view="settings">' + esc(this._t("edit_plan")) + "</button></div>";
       }
-      return html + "</div></div>";
-    }
+      html += this._group(this._t("grp_plan"), plan);
 
-    _fmtTime(value) {
-      var d = new Date(value);
-      if (isNaN(d.getTime())) {
-        return String(value);
-      }
-      try {
-        return d.toLocaleString(this._hass.language, {
-          weekday: "short", hour: "2-digit", minute: "2-digit",
+      var door = "";
+      if (e.opening) {
+        DOOR_SWITCHES.forEach(function (key) {
+          if (e[key]) {
+            door += self._toggle(e[key], self._t(key));
+          }
         });
-      } catch (e) {
-        return d.toLocaleString();
       }
+      html += this._group(this._t("grp_door"), door);
+
+      var protect = "";
+      PROTECT_SWITCHES.forEach(function (key) {
+        if (e[key]) {
+          protect += self._toggle(e[key], self._t(key));
+        }
+      });
+      html += this._group(this._t("grp_protect"), protect);
+
+      return html + "</div></div></div>";
     }
 
     _render() {
@@ -658,11 +842,16 @@
         return;
       }
       var data = this._collect();
-      var html = "<style>" + STYLE + "</style><ha-card><h2>" +
-        esc(this._config.title || this._t("title")) + "</h2>";
+      var html = "<style>" + STYLE + "</style><ha-card>";
       if (!data.found) {
-        html += '<div class="empty">' + esc(this._t("no_entities")) + "</div>";
+        html += '<div class="bar"><h2>' + esc(this._config.title || this._t("title")) + "</h2></div>" +
+          '<div class="empty">' + esc(this._t("no_entities")) + "</div>";
       } else {
+        html += this._renderHeader(data.global);
+        if (this._error) {
+          html += '<div class="error" role="alert"><span>' + esc(this._error) + "</span>" +
+            '<button data-act="dismiss">' + esc(this._t("dismiss")) + "</button></div>";
+        }
         html += this._renderAlerts(data.global.active_alerts);
         html += this._renderGlobalSection(data.global);
         var periodState = this._state(data.global.heating_period);
@@ -672,9 +861,12 @@
         });
         if (!ids.length) {
           html += '<div class="empty">' + esc(this._t("no_rooms")) + "</div>";
-        }
-        for (var i = 0; i < ids.length; i++) {
-          html += this._renderRoom(data.rooms[ids[i]], periodActive);
+        } else {
+          html += '<div class="grid">';
+          for (var i = 0; i < ids.length; i++) {
+            html += this._renderRoom(data.rooms[ids[i]], periodActive);
+          }
+          html += "</div>";
         }
       }
       html += "</ha-card>";
@@ -782,7 +974,10 @@
         this._call("button", "press", { entity_id: ent });
       } else if (act === "pair") {
         var self = this;
-        this._call("heat_pilot", "pair_door_sensor", {}).then(function () {
+        this._call("heat_pilot", "pair_door_sensor", {}).then(function (ok) {
+          if (!ok) {
+            return;
+          }
           self._pairing = true;
           self._render();
           setTimeout(function () {
@@ -790,10 +985,15 @@
             self._render();
           }, 120000);
         });
-      } else if (act === "collapse") {
+      } else if (act === "room") {
         var key = node.getAttribute("data-key");
-        this._open[key] = !this._open[key];
+        this._room = this._room === key ? null : key;
         this._render();
+      } else if (act === "global") {
+        this._globalOpen = !this._globalOpen;
+        this._render();
+      } else if (act === "dismiss") {
+        this._clearError();
       } else if (act === "plan") {
         // For the schedule helper the dialog opens on its settings tab, which
         // holds the schedule editor (instead of the plain detail view).
@@ -817,9 +1017,9 @@
         var d = this._periodDraft || {};
         var current = this._state(this._collect().global.heating_period);
         var a = current ? current.attributes : {};
-        var pick = function (key) {
-          var n = parseInt(d[key] !== undefined ? d[key] : a[key], 10);
-          return isNaN(n) ? a[key] : n;
+        var pick = function (field) {
+          var n = parseInt(d[field] !== undefined ? d[field] : a[field], 10);
+          return isNaN(n) ? a[field] : n;
         };
         this._call("heat_pilot", "set_heating_period", {
           start_month: pick("start_month"),
@@ -833,11 +1033,42 @@
       }
     }
 
+    _clearError() {
+      if (this._errorTimer) {
+        clearTimeout(this._errorTimer);
+        this._errorTimer = null;
+      }
+      this._error = "";
+      this._render();
+    }
+
+    /** Show a service error inside the card (window.alert blocks the companion app). */
+    _showError(err) {
+      var self = this;
+      this._error = err && err.message ? err.message : String(err);
+      if (this._errorTimer) {
+        clearTimeout(this._errorTimer);
+      }
+      this._errorTimer = setTimeout(function () {
+        self._errorTimer = null;
+        self._error = "";
+        self._render();
+      }, 10000);
+      this._render();
+    }
+
+    /** Calls a service; resolves to true on success, false after showing the error. */
     _call(domain, service, data) {
-      return this._hass.callService(domain, service, data).catch(function (err) {
-        // Surface validation errors (e.g. an invalid date) to the user.
-        window.alert(err && err.message ? err.message : String(err));
-      });
+      var self = this;
+      return this._hass.callService(domain, service, data).then(
+        function () {
+          return true;
+        },
+        function (err) {
+          self._showError(err);
+          return false;
+        }
+      );
     }
   }
 
@@ -867,6 +1098,6 @@
   window.customCards.push({
     type: "heat-pilot-card",
     name: "Heat Pilot",
-    description: "Raumweise Heizungssteuerung: Status, Temperaturen, Schalter und Zeitplan.",
+    description: "Raumweise Heizungssteuerung: Raumkacheln mit Temperaturen, Status, Schaltern und Zeitplan.",
   });
 })();
