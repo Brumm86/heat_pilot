@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.0
+
+- Karte: Die Raumkacheln lassen sich per Drag & Drop umsortieren. Mit der Maus wird die Kachel einfach gezogen, auf dem Touchscreen (Companion App) zuerst etwa eine drittel Sekunde gedrückt gehalten (kurze Vibration) und dann gezogen; bei normaler Wischbewegung scrollt die Seite weiter wie gewohnt. Beim Ziehen springen die anderen Kacheln live an ihren neuen Platz; eine aufgeklappte Kachel wird dabei eingeklappt. Bedienelemente auf der Kachel (+/−, Schalter, Regler) lösen kein Ziehen aus, und nach dem Ablegen wird die Kachel nicht versehentlich auf- oder zugeklappt.
+- Karte: Die Reihenfolge wird je Benutzer gespeichert (Benutzerdaten des Home-Assistant-Frontends, zusätzlich als Kopie im Browser) und gilt damit auf allen Geräten dieses Benutzers. Räume ohne gespeicherte Position (z. B. neu angelegte) erscheinen alphabetisch am Ende. Ohne gespeicherte Reihenfolge bleibt es bei der alphabetischen Sortierung. Entitäten, Dienste und Verhalten der Integration bleiben unverändert.
+
 ## 0.15.0
 
 - Karte neu gestaltet: Der Kopf zeigt Titel und Statuschips (Heizperiode aktiv/inaktiv, Abwesenheit). Jeder Raum ist eine Kachel mit Ist-Temperatur, Solltemperatur, Statussymbol und Farbe (warm = Komfort/Boost, kühl = Absenkung, grau = aus/Heizperiode inaktiv, rot = Tür/Fenster offen). Der Sollwert lässt sich direkt auf der Kachel mit +/− ändern. Ein Tipp auf die Kachel klappt die Details über die volle Breite auf (immer nur ein Raum offen), gruppiert in Temperaturen, Boost, Plan, Tür/Fenster und Schutz; der Raumstatus steht dort auch als Text. Räume ohne Thermostat zeigen den Zustand der Tür/des Fensters.

@@ -14,6 +14,10 @@
  * Layout: header with status chips, alert banner, collapsible general
  * settings and one tile per room (current/target temperature, quick +/-).
  * Tapping a tile opens its details across the full width (one at a time).
+ *
+ * Tiles can be rearranged by drag and drop (mouse: drag; touch: long-press,
+ * then drag). The order is stored per user (frontend user data, with
+ * localStorage as fallback) and survives reloads and device changes.
  */
 (function () {
   "use strict";
@@ -194,6 +198,12 @@
     opening: "warn",
   };
 
+  var ORDER_KEY = "heat_pilot_card_order";
+  var LONG_PRESS_MS = 350; // touch: hold this long before a drag starts
+  var MOVE_THRESHOLD = 6; // px: mouse drag start / touch long-press cancel
+  // Controls inside a tile that must keep working and never start a drag.
+  var NO_DRAG = ".sbtn,.detail,input,select,ha-switch,ha-slider,ha-selector,button.link,button.primary";
+
   function esc(value) {
     return String(value === undefined || value === null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -293,6 +303,9 @@
     ".tile.tone-warn{--accent:var(--hp-warn)}" +
     ".tile.tone-idle{--accent:var(--primary-color)}" +
     ".tile.open{grid-column:1/-1}" +
+    ".tile{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}" +
+    ".tile.dragging{position:relative;z-index:10;transition:none;opacity:.92;cursor:grabbing;" +
+    "box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none}" +
     ".thead{display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%;box-sizing:border-box;" +
     "padding:10px 12px 6px;background:none;border:none;text-align:left;cursor:pointer}" +
     ".trow{display:flex;align-items:center;justify-content:space-between;gap:6px}" +
@@ -321,6 +334,15 @@
       this._room = null; // device id of the one open room tile
       this._error = "";
       this._errorTimer = null;
+      this._order = null; // saved room order (device ids)
+      this._orderLoaded = false;
+      this._drag = null;
+      this._noClickUntil = 0;
+      this._pendingRender = false;
+      this._onDragMove = this._dragMove.bind(this);
+      this._onDragEnd = this._dragEnd.bind(this, false);
+      this._onDragCancel = this._dragEnd.bind(this, true);
+      this._wireDrag();
     }
 
     setConfig(config) {
@@ -339,6 +361,10 @@
 
     set hass(hass) {
       this._hass = hass;
+      if (!this._orderLoaded) {
+        this._orderLoaded = true;
+        this._loadOrder();
+      }
       var sig = this._signature();
       if (sig !== this._sig) {
         this._sig = sig;
@@ -352,6 +378,258 @@
       var lang = ((this._hass && this._hass.language) || "en").split("-")[0];
       var table = TXT[lang] || TXT.en;
       return table[key] !== undefined ? table[key] : TXT.en[key] || key;
+    }
+
+    // ------------------------------------------------- tile order, drag & drop
+
+    _loadOrder() {
+      var self = this;
+      try {
+        var raw = window.localStorage.getItem(ORDER_KEY);
+        var list = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(list)) {
+          this._order = list;
+        }
+      } catch (e) {
+        /* storage not available */
+      }
+      if (this._hass && typeof this._hass.callWS === "function") {
+        this._hass.callWS({ type: "frontend/get_user_data", key: ORDER_KEY }).then(
+          function (res) {
+            var value = res && res.value;
+            if (Array.isArray(value)) {
+              self._order = value;
+              self._render();
+            }
+          },
+          function () {
+            /* keep the local order */
+          }
+        );
+      }
+    }
+
+    _saveOrder(ids) {
+      this._order = ids;
+      try {
+        window.localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+      } catch (e) {
+        /* storage not available */
+      }
+      if (this._hass && typeof this._hass.callWS === "function") {
+        this._hass.callWS({ type: "frontend/set_user_data", key: ORDER_KEY, value: ids }).then(
+          function () {},
+          function () {
+            /* the local copy still holds the order */
+          }
+        );
+      }
+    }
+
+    /** Room ids: saved order first, rooms without a saved position by name. */
+    _sortedRoomIds(rooms) {
+      var order = this._order || [];
+      return Object.keys(rooms).sort(function (a, b) {
+        var ia = order.indexOf(a);
+        var ib = order.indexOf(b);
+        if (ia === -1 && ib === -1) {
+          return String(rooms[a].name).localeCompare(String(rooms[b].name));
+        }
+        if (ia === -1) {
+          return 1;
+        }
+        if (ib === -1) {
+          return -1;
+        }
+        return ia - ib;
+      });
+    }
+
+    _wireDrag() {
+      var self = this;
+      var root = this.shadowRoot;
+      root.addEventListener("pointerdown", function (ev) {
+        self._dragStart(ev);
+      });
+      // A drag must not end in a click on the tile below the pointer.
+      root.addEventListener(
+        "click",
+        function (ev) {
+          if (Date.now() < self._noClickUntil) {
+            ev.stopPropagation();
+            ev.preventDefault();
+          }
+        },
+        true
+      );
+      root.addEventListener("contextmenu", function (ev) {
+        if (self._drag) {
+          ev.preventDefault();
+        }
+      });
+      // Once a touch drag runs, the page must not scroll with it.
+      root.addEventListener(
+        "touchmove",
+        function (ev) {
+          if (self._drag && self._drag.active && ev.cancelable) {
+            ev.preventDefault();
+          }
+        },
+        { passive: false }
+      );
+    }
+
+    _dragStart(ev) {
+      if (this._drag || !ev.target || !ev.target.closest) {
+        return;
+      }
+      if (ev.pointerType === "mouse" && ev.button !== 0) {
+        return;
+      }
+      var tile = ev.target.closest(".tile");
+      if (!tile || ev.target.closest(NO_DRAG)) {
+        return;
+      }
+      if (this.shadowRoot.querySelectorAll(".tile").length < 2) {
+        return;
+      }
+      var self = this;
+      this._drag = {
+        id: tile.getAttribute("data-id"),
+        tile: tile,
+        pointerId: ev.pointerId,
+        type: ev.pointerType,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        x: ev.clientX,
+        y: ev.clientY,
+        active: false,
+        timer: null,
+      };
+      if (ev.pointerType !== "mouse") {
+        this._drag.timer = setTimeout(function () {
+          self._dragBegin();
+        }, LONG_PRESS_MS);
+      }
+      window.addEventListener("pointermove", this._onDragMove);
+      window.addEventListener("pointerup", this._onDragEnd);
+      window.addEventListener("pointercancel", this._onDragCancel);
+    }
+
+    _dragMove(ev) {
+      var d = this._drag;
+      if (!d || ev.pointerId !== d.pointerId) {
+        return;
+      }
+      d.x = ev.clientX;
+      d.y = ev.clientY;
+      if (!d.active) {
+        var dist = Math.sqrt(Math.pow(d.x - d.startX, 2) + Math.pow(d.y - d.startY, 2));
+        if (dist > MOVE_THRESHOLD) {
+          if (d.type === "mouse") {
+            this._dragBegin();
+          } else {
+            this._dragEnd(true, ev); // the finger moves: the user scrolls
+          }
+        }
+        return;
+      }
+      if (ev.cancelable) {
+        ev.preventDefault();
+      }
+      this._dragUpdate();
+    }
+
+    _dragBegin() {
+      var d = this._drag;
+      if (!d || d.active) {
+        return;
+      }
+      if (d.timer) {
+        clearTimeout(d.timer);
+        d.timer = null;
+      }
+      // Collapse an open tile first: all tiles then have the same size.
+      if (this._room) {
+        this._room = null;
+        this._render();
+        d.tile = this.shadowRoot.querySelector('.tile[data-id="' + d.id + '"]');
+        if (!d.tile) {
+          this._dragEnd(true);
+          return;
+        }
+      }
+      d.active = true;
+      var rect = d.tile.getBoundingClientRect();
+      d.grabX = d.x - rect.left;
+      d.grabY = d.y - rect.top;
+      d.tile.classList.add("dragging");
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate(15);
+        } catch (e) {
+          /* not supported */
+        }
+      }
+      this._dragUpdate();
+    }
+
+    /** Swap into the slot under the pointer and let the tile follow the pointer. */
+    _dragUpdate() {
+      var d = this._drag;
+      var tile = d.tile;
+      var grid = tile.parentNode;
+      tile.style.transform = "";
+      var tiles = Array.prototype.slice.call(grid.querySelectorAll(".tile"));
+      var target = null;
+      for (var i = 0; i < tiles.length; i++) {
+        if (tiles[i] === tile) {
+          continue;
+        }
+        var r = tiles[i].getBoundingClientRect();
+        if (d.x >= r.left && d.x <= r.right && d.y >= r.top && d.y <= r.bottom) {
+          target = tiles[i];
+          break;
+        }
+      }
+      if (target) {
+        if (tiles.indexOf(tile) < tiles.indexOf(target)) {
+          grid.insertBefore(tile, target.nextSibling);
+        } else {
+          grid.insertBefore(tile, target);
+        }
+      }
+      var own = tile.getBoundingClientRect();
+      tile.style.transform =
+        "translate(" + Math.round(d.x - d.grabX - own.left) + "px," + Math.round(d.y - d.grabY - own.top) + "px)";
+    }
+
+    _dragEnd(cancelled) {
+      var d = this._drag;
+      if (!d) {
+        return;
+      }
+      this._drag = null;
+      if (d.timer) {
+        clearTimeout(d.timer);
+      }
+      window.removeEventListener("pointermove", this._onDragMove);
+      window.removeEventListener("pointerup", this._onDragEnd);
+      window.removeEventListener("pointercancel", this._onDragCancel);
+      if (!d.active) {
+        return;
+      }
+      this._noClickUntil = Date.now() + 400;
+      d.tile.style.transform = "";
+      d.tile.classList.remove("dragging");
+      if (!cancelled) {
+        var ids = Array.prototype.map.call(this.shadowRoot.querySelectorAll(".tile"), function (t) {
+          return t.getAttribute("data-id");
+        });
+        this._saveOrder(ids);
+      }
+      this._pendingRender = false;
+      this._render();
     }
 
     /** Find all entities of this integration, grouped by device. */
@@ -736,7 +1014,7 @@
         main = '<span class="tcur">–</span>';
       }
       var html =
-        '<div class="tile tone-' + tone + (open ? " open" : "") + '">' +
+        '<div class="tile tone-' + tone + (open ? " open" : "") + '" data-id="' + esc(room.id) + '">' +
         '<button class="thead" data-act="room" data-key="' + esc(room.id) + '" aria-expanded="' +
         (open ? "true" : "false") + '" title="' + esc(this._t(open ? "collapse" : "expand")) + '">' +
         '<span class="trow"><span class="tname">' + esc(room.name) + '</span><span class="ticons">' + icons +
@@ -837,6 +1115,10 @@
       if (!root) {
         return;
       }
+      if (this._drag && this._drag.active) {
+        this._pendingRender = true; // re-rendering would destroy the tile being dragged
+        return;
+      }
       if (!this._hass) {
         root.innerHTML = "<style>" + STYLE + "</style><ha-card></ha-card>";
         return;
@@ -856,9 +1138,7 @@
         html += this._renderGlobalSection(data.global);
         var periodState = this._state(data.global.heating_period);
         var periodActive = !!periodState && periodState.state === "active";
-        var ids = Object.keys(data.rooms).sort(function (a, b) {
-          return String(data.rooms[a].name).localeCompare(String(data.rooms[b].name));
-        });
+        var ids = this._sortedRoomIds(data.rooms);
         if (!ids.length) {
           html += '<div class="empty">' + esc(this._t("no_rooms")) + "</div>";
         } else {
@@ -1098,6 +1378,6 @@
   window.customCards.push({
     type: "heat-pilot-card",
     name: "Heat Pilot",
-    description: "Raumweise Heizungssteuerung: Raumkacheln mit Temperaturen, Status, Schaltern und Zeitplan.",
+    description: "Raumweise Heizungssteuerung: Raumkacheln (per Drag & Drop sortierbar) mit Temperaturen, Status, Schaltern und Zeitplan.",
   });
 })();
